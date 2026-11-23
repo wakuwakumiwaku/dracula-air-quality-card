@@ -1,10 +1,13 @@
 # Dracula Air Quality Card
 
+[![Live Interactive Demo](https://img.shields.io/badge/Live_Demo-Interactive-bd93f9.svg?style=for-the-badge)](https://wakuwakumiwaku.github.io/dracula-air-quality-card/)
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge)](https://github.com/hacs/integration)
 [![Validate with HACS](https://img.shields.io/github/actions/workflow/status/wakuwakumiwaku/dracula-air-quality-card/validate.yml?branch=main&label=HACS%20Validate&style=for-the-badge)](https://github.com/wakuwakumiwaku/dracula-air-quality-card/actions/workflows/validate.yml)
-[![MIT License](https://img.shields.io/github/license/wakuwakumiwaku/dracula-air-quality-card?style=for-the-badge&color=bd93f9)](./LICENSE)
+[![MIT License](https://img.shields.io/github/license/wakuwakumiwaku/dracula-air-quality-card?style=for-the-badge&color=50fa7b)](./LICENSE)
 
 A zero-dependency Home Assistant Lovelace custom card built around a **Whole-Home Air Quality Overview** for grouped air purifiers and CO/CO₂/VOC/PM sensors — with optional focused modes for a single purifier or standalone air quality monitor — styled with the [Dracula](https://draculatheme.com/) palette.
+
+**[Try the Live Interactive Demo →](https://wakuwakumiwaku.github.io/dracula-air-quality-card/)**
 
 ![Dracula Air Quality Card Preview](./preview.png)
 
@@ -248,6 +251,8 @@ sensors:
 | `devices` | `list` | — | **Standard mode:** List of entity IDs (`"fan.room"`) or device objects (`{ entity, name, room, group, sensors, ... }`) for Whole-Home Overview (alias: `entities`) |
 | `group_by` | `string` | `"type"` | Overview grouping mode: `"type"` (`Air Purifiers` / `Air Quality Sensors`), `"room"` (by each item's `room` / `group` label), or `"none"` (flat list) |
 | `sort_by` | `string` | `"default"` | Overview room sorting: `"default"`, `"pm25"` (worst first), `"filter"` (lowest first), or `"name"` (A–Z) |
+| `default_filter` | `string` | `"all"` | Initial active tab in Overview Mode: `"all"`, `"purifiers"`, or `"sensors"` |
+| `show_header` | `boolean` | `true` | Show or hide the card header (set `false` to embed cleanly in tabbed dashboards) |
 | `outdoor_pm25_entity` | `string` | — | Outdoor PM2.5 sensor for the contextual Ventilation Advisor pill |
 | `outdoor_aqi_entity` | `string` | — | Optional outdoor AQI sensor fallback for the Ventilation Advisor pill |
 | `entity` | `string` | — | Optional: Primary `fan.*` entity ID for Single Purifier Mode |

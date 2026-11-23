@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dracula Air Quality Card — Interactive Demo</title>
+  <style>
+    :root {
+      color-scheme: dark;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      max-width: 100%;
+      overflow-x: hidden;
+    }
+    body {
+      min-height: 100vh;
+      background: #191a21;
+      color: #f8f8f2;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      padding: 16px 22px 24px;
+      transition: background 0.2s ease, color 0.2s ease;
+    }
+    body[data-demo-theme="dracula-soft"] {
+      background: #1e202b;
+    }
+    body[data-demo-theme="auto"] {
+      background: #f2f4f8;
+      color: #1c1f2b;
+      --ha-card-background: #ffffff;
+      --card-background-color: #ffffff;
+      --secondary-background-color: #f3f5f9;
+      --divider-color: rgba(28, 31, 43, 0.14);
+      --primary-text-color: #1c1f2b;
+      --secondary-text-color: #55607a;
+      --primary-color: #6c47d9;
+      --ha-card-box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
+    }
+    body[data-demo-theme="auto"] .brand h1,
+    body[data-demo-theme="auto"] .col-label .primary-title {
+      color: #1c1f2b;
+    }
+    body[data-demo-theme="auto"] .brand p {
+      color: #55607a;
+    }
+    body[data-demo-theme="auto"] .toolbar-group,
+    body[data-demo-theme="auto"] .status-pill {
+      background: #ffffff;
+      border-color: rgba(28, 31, 43, 0.14);
+      color: #55607a;
+    }
+    body[data-demo-theme="auto"] .seg-btn {
+      color: #55607a;
+    }
+    body[data-demo-theme="auto"] .seg-btn.active {
+      background: rgba(108, 71, 217, 0.14);
+      color: #6c47d9;
+    }
+
+    .page-header {
+      max-width: 1280px;
+      margin: 0 auto 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      min-width: 0;
+    }
+    .brand-badge {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, rgba(189, 147, 249, 0.25), rgba(139, 233, 253, 0.2));
+      border: 1px solid rgba(189, 147, 249, 0.45);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #bd93f9;
+      flex-shrink: 0;
+    }
+    .brand-badge svg {
+      width: 19px;
+      height: 19px;
+    }
+    .brand-text {
+      min-width: 0;
+    }
+    .brand h1 {
+      margin: 0;
+      font-size: 17px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: #f8f8f2;
+    }
+    .brand p {
+      margin: 2px 0 0;
+      font-size: 12px;
+      color: #b8c0e0;
+    }
+    .header-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      max-width: 100%;
+    }
+    .toolbar-group {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      padding: 3px;
+      border-radius: 999px;
+      background: #21222c;
+      border: 1px solid rgba(98, 114, 164, 0.35);
+    }
+    .seg-btn {
+      border: 0;
+      background: transparent;
+      color: #b8c0e0;
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 9px;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .seg-btn:hover {
+      color: #f8f8f2;
+    }
+    .seg-btn.active {
+      background: rgba(189, 147, 249, 0.24);
+      color: #f8f8f2;
+    }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 5px 11px;
+      border-radius: 999px;
+      background: #21222c;
+      border: 1px solid rgba(98, 114, 164, 0.35);
+      font-size: 11px;
+      color: #b8c0e0;
+      font-variant-numeric: tabular-nums;
+      max-width: 240px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #50fa7b;
+      box-shadow: 0 0 8px rgba(80, 250, 123, 0.55);
+      flex-shrink: 0;
+    }
+    .showcase-grid {
+      max-width: 1280px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: minmax(440px, 1.25fr) 352px 352px;
+      gap: 18px;
+      align-items: start;
+    }
+    .col {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-width: 0;
+    }
+    .col-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 0 4px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #6272a4;
+    }
+    .col-label .primary-title {
+      color: #f8f8f2;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .col-label .std-badge {
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: rgba(189, 147, 249, 0.2);
+      border: 1px solid rgba(189, 147, 249, 0.5);
+      color: #bd93f9;
+      font-size: 9.5px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+    }
+    .col-label span.tag {
+      color: #bd93f9;
+      font-weight: 600;
+      text-transform: none;
+      letter-spacing: 0.01em;
+      white-space: nowrap;
+    }
+    .col-label span.tag.muted {
+      color: #8be9fd;
+    }
+    @media (max-width: 1180px) {
+      .showcase-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .col.col-overview {
+        grid-column: 1 / -1;
+      }
+    }
+    @media (max-width: 720px) {
+      body {
+        padding: 12px 12px 20px;
+      }
+      .page-header {
+        margin-bottom: 12px;
+      }
+      .brand h1 {
+        font-size: 15.5px;
+      }
+      .brand p {
+        font-size: 11.5px;
+      }
+      .status-pill {
+        max-width: 100%;
+      }
+      .showcase-grid {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 14px;
+      }
+    }
+  </style>
+</head>
+<body data-demo-theme="dracula">
+  <header class="page-header">
+    <div class="brand">
+      <div class="brand-badge" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2" />
+          <path d="M9.6 4.6A2 2 0 1 1 11 8H2" />
+          <path d="M12.6 19.4A2 2 0 1 0 14 16H2" />
+        </svg>
+      </div>
+      <div class="brand-text">
+        <h1>Dracula Air Quality Card</h1>
+        <p>Whole-Home Overview (Standard) · 24h Sparklines · Themes &amp; i18n</p>
+      </div>
+    </div>
+
+    <div class="header-controls">
+      <div class="toolbar-group" role="group" aria-label="Theme">
+        <button type="button" class="seg-btn active" data-theme-btn="dracula">Dracula</button>
+        <button type="button" class="seg-btn" data-theme-btn="dracula-soft">Soft</button>
+        <button type="button" class="seg-btn" data-theme-btn="auto">Auto</button>
+      </div>
+      <div class="toolbar-group" role="group" aria-label="Language">
+        <button type="button" class="seg-btn active" data-lang-btn="en">EN</button>
+        <button type="button" class="seg-btn" data-lang-btn="de">DE</button>
+        <button type="button" class="seg-btn" data-lang-btn="fr">FR</button>
+        <button type="button" class="seg-btn" data-lang-btn="es">ES</button>
+      </div>
+      <div class="status-pill" id="activity-log">
+        <span class="status-dot"></span>
+        <span>Live mock HA ready</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="showcase-grid">
+    <section class="col col-overview">
+      <div class="col-label">
+        <span class="primary-title"><span class="std-badge">STANDARD</span> Whole-Home Overview</span>
+        <span class="tag">5 Purifiers + 3 Sensors</span>
+      </div>
+      <div id="slot-overview"></div>
+    </section>
+
+    <section class="col">
+      <div class="col-label">
+        <span>Optional · Single Purifier</span>
+        <span class="tag muted">Levoit Core 300S</span>
+      </div>
+      <div id="slot-purifier"></div>
+    </section>
+
+    <section class="col">
+      <div class="col-label">
+        <span>Optional · AQ Sensor</span>
+        <span class="tag muted">CO · CO₂ · VOC · PM</span>
+      </div>
+      <div id="slot-sensor"></div>
+    </section>
+  </main>
+
+  <script type="module">
+    import "./dracula-air-quality-card.js";
+
+    const activityLog = document.getElementById("activity-log");
+    function logActivity(msg) {
+      activityLog.innerHTML = `<span class="status-dot"></span><span>${msg}</span>`;
+    }
+
+    let currentTheme = "dracula";
+    let currentLang = "en";
+
+    const baseCadr = {
+      bedroom_levoit_core_300s: 240,
+      living_room_levoit_core_400s: 400,
+      kitchen_levoit_vital_200s: 410,
+      master_xiaomi_4_pro: 500,
+      nursery_ikea_starkvind: 270,
+    };
+
+    /* Realistic 24-hour hourly mock history series for SVG sparklines */
+    const historySeries = {
+      "sensor.bedroom_levoit_core_300s_pm25": [7, 6, 6, 5, 5, 4, 5, 6, 8, 7, 6, 5, 5, 4, 4, 5, 6, 5, 5, 6, 5, 5, 4, 5],
+      "sensor.living_room_levoit_core_400s_pm25": [8, 7, 7, 6, 6, 7, 10, 13, 15, 12, 10, 9, 8, 9, 11, 14, 12, 10, 9, 8, 9, 10, 9, 9],
+      "sensor.kitchen_levoit_vital_200s_pm25": [9, 8, 7, 7, 8, 12, 18, 14, 11, 10, 12, 24, 31, 19, 13, 11, 15, 29, 48, 54, 46, 41, 39, 38],
+      "sensor.master_xiaomi_4_pro_pm25": [8, 7, 6, 5, 5, 5, 6, 7, 9, 8, 7, 6, 6, 5, 5, 6, 7, 7, 6, 6, 5, 6, 6, 6],
+      "sensor.nursery_ikea_starkvind_pm25": [9, 8, 7, 7, 6, 6, 7, 8, 8, 7, 7, 6, 6, 7, 8, 7, 7, 6, 7, 8, 7, 7, 7, 7],
+      "sensor.office_air_pm25": [6, 6, 5, 5, 6, 7, 9, 11, 13, 15, 16, 15, 14, 13, 15, 17, 18, 16, 15, 14, 13, 14, 14, 14],
+      "sensor.office_air_co2": [460, 450, 445, 440, 445, 460, 510, 590, 680, 790, 860, 920, 810, 740, 820, 910, 950, 880, 790, 720, 690, 710, 730, 740],
+      "sensor.basement_air_pm25": [14, 14, 13, 13, 14, 15, 16, 17, 18, 19, 20, 21, 19, 18, 18, 19, 20, 21, 20, 19, 18, 19, 19, 19],
+      "sensor.basement_air_co2": [720, 740, 760, 780, 810, 850, 890, 940, 990, 1040, 1080, 1110, 1090, 1060, 1080, 1130, 1160, 1180, 1150, 1130, 1110, 1100, 1115, 1120],
+      "sensor.garage_co": [2, 2, 1, 1, 2, 2, 3, 11, 14, 8, 5, 3, 2, 2, 3, 4, 9, 12, 8, 6, 5, 5, 6, 6],
+    };
+
+    function callApi(method, path) {
+      if (method === "GET" && typeof path === "string" && path.startsWith("history/period/")) {
+        const qIndex = path.indexOf("?");
+        const params = new URLSearchParams(qIndex >= 0 ? path.slice(qIndex + 1) : "");
+        const entityId = params.get("filter_entity_id");
+        const pts = historySeries[entityId];
+        if (pts && pts.length) {
+          const now = Date.now();
+          const series = pts.map((v, i) => ({
+            state: String(v),
+            last_changed: new Date(now - (pts.length - 1 - i) * 3600000).toISOString(),
+          }));
+          return Promise.resolve([series]);
+        }
+        return Promise.resolve([[]]);
+      }
+      return Promise.resolve([]);
+    }
+
+    const states = {
+      /* --- 1. Bedroom: Levoit Core 300S (ESPHome / VeSync style) --- */
+      "fan.bedroom_levoit_core_300s": {
+        entity_id: "fan.bedroom_levoit_core_300s",
+        state: "on",
+        attributes: {
+          friendly_name: "Bedroom Core 300S",
+          percentage: 50,
+          percentage_step: 25,
+          preset_modes: ["auto", "manual", "sleep"],
+          preset_mode: "auto",
+        },
+      },
+      "sensor.bedroom_levoit_core_300s_pm25": {
+        entity_id: "sensor.bedroom_levoit_core_300s_pm25",
+        state: "5",
+        attributes: { unit_of_measurement: "µg/m³", device_class: "pm25", friendly_name: "Bedroom PM2.5" },
+      },
+      "sensor.bedroom_levoit_core_300s_cadr": {
+        entity_id: "sensor.bedroom_levoit_core_300s_cadr",
+        state: "142",
+        attributes: { unit_of_measurement: "m³/h", friendly_name: "Bedroom CADR" },
+      },
+      "sensor.bedroom_levoit_core_300s_filter_life": {
+        entity_id: "sensor.bedroom_levoit_core_300s_filter_life",
+        state: "92",
+        attributes: { unit_of_measurement: "%", friendly_name: "Bedroom Filter Life" },
+      },
+      "switch.bedroom_levoit_core_300s_display": {
+        entity_id: "switch.bedroom_levoit_core_300s_display",
+        state: "on",
+        attributes: { friendly_name: "Bedroom Display" },
+      },
+      "switch.bedroom_levoit_core_300s_display_lock": {
+        entity_id: "switch.bedroom_levoit_core_300s_display_lock",
+        state: "off",
+        attributes: { friendly_name: "Bedroom Display Lock" },
+      },
+      "select.bedroom_levoit_core_300s_fan_mode": {
+        entity_id: "select.bedroom_levoit_core_300s_fan_mode",
+        state: "Auto",
+        attributes: { options: ["Auto", "Manual", "Sleep"], friendly_name: "Bedroom Fan Mode" },
+      },
+      "select.bedroom_levoit_core_300s_auto_mode": {
+        entity_id: "select.bedroom_levoit_core_300s_auto_mode",
+        state: "Quiet",
+        attributes: { options: ["Default", "Quiet", "Efficient"], friendly_name: "Bedroom Auto Profile" },
+      },
+      "number.bedroom_levoit_core_300s_timer": {
+        entity_id: "number.bedroom_levoit_core_300s_timer",
+        state: "60",
+        attributes: { min: 0, max: 720, step: 30, unit_of_measurement: "min", friendly_name: "Bedroom Timer" },
+      },
+      "sensor.bedroom_levoit_core_300s_timer_remaining": {
+        entity_id: "sensor.bedroom_levoit_core_300s_timer_remaining",
+        state: "60",
+        attributes: { unit_of_measurement: "min", friendly_name: "Bedroom Timer Remaining" },
+      },
+
+      /* --- 2. Living Room: Levoit Core 400S --- */
+      "fan.living_room_levoit_core_400s": {
+        entity_id: "fan.living_room_levoit_core_400s",
+        state: "on",
+        attributes: {
+          friendly_name: "Living Room Core 400S",
+          percentage: 50,
+          percentage_step: 25,
+          preset_modes: ["auto", "manual", "sleep"],
+          preset_mode: "auto",
+        },
+      },
+      "sensor.living_room_levoit_core_400s_pm25": {
+        entity_id: "sensor.living_room_levoit_core_400s_pm25",
+        state: "9",
+        attributes: { unit_of_measurement: "µg/m³", device_class: "pm25" },
+      },
+      "sensor.living_room_levoit_core_400s_cadr": {
+        entity_id: "sensor.living_room_levoit_core_400s_cadr",
+        state: "215",
+        attributes: { unit_of_measurement: "m³/h" },
+      },
+      "sensor.living_room_levoit_core_400s_filter_life": {
+        entity_id: "sensor.living_room_levoit_core_400s_filter_life",
+        state: "78",
+        attributes: { unit_of_measurement: "%" },
+      },
+      "switch.living_room_levoit_core_400s_display": {
+        entity_id: "switch.living_room_levoit_core_400s_display",
+        state: "on",
+        attributes: {},
+      },
+      "switch.living_room_levoit_core_400s_display_lock": {
+        entity_id: "switch.living_room_levoit_core_400s_display_lock",
+        state: "off",
+        attributes: {},
+      },
+      "select.living_room_levoit_core_400s_fan_mode": {
+        entity_id: "select.living_room_levoit_core_400s_fan_mode",
+        state: "Auto",
+        attributes: { options: ["Auto", "Manual", "Sleep"] },
+      },
+      "select.living_room_levoit_core_400s_auto_mode": {
+        entity_id: "select.living_room_levoit_core_400s_auto_mode",
+        state: "Default",
+        attributes: { options: ["Default", "Quiet", "Efficient"] },
+      },
+
+      /* --- 3. Kitchen: Levoit Vital 200S --- */
+      "fan.kitchen_levoit_vital_200s": {
+        entity_id: "fan.kitchen_levoit_vital_200s",
+        state: "on",
+        attributes: {
+          friendly_name: "Kitchen Vital 200S",
+          percentage: 100,
+          percentage_step: 25,
+          preset_modes: ["auto", "manual", "sleep", "pet"],
+          preset_mode: "auto",
+        },
+      },
+      "sensor.kitchen_levoit_vital_200s_pm25": {
+        entity_id: "sensor.kitchen_levoit_vital_200s_pm25",
+        state: "38",
+        attributes: { unit_of_measurement: "µg/m³", device_class: "pm25" },
+      },
+      "sensor.kitchen_levoit_vital_200s_cadr": {
+        entity_id: "sensor.kitchen_levoit_vital_200s_cadr",
+        state: "390",
+        attributes: { unit_of_measurement: "m³/h" },
+      },
+      "sensor.kitchen_levoit_vital_200s_filter_life": {
+        entity_id: "sensor.kitchen_levoit_vital_200s_filter_life",
+        state: "11",
+        attributes: { unit_of_measurement: "%", friendly_name: "Kitchen Filter Life" },
+      },
+      "button.kitchen_levoit_vital_200s_filter_reset": {
+        entity_id: "button.kitchen_levoit_vital_200s_filter_reset",
+        state: "unknown",
+        attributes: { friendly_name: "Kitchen Filter Reset" },
+      },
+      "sensor.outdoor_pm25": {
+        entity_id: "sensor.outdoor_pm25",
+        state: "6",
+        attributes: { unit_of_measurement: "µg/m³", device_class: "pm25", friendly_name: "Outdoor PM2.5" },
+      },
+      "switch.kitchen_levoit_vital_200s_display": {
+        entity_id: "switch.kitchen_levoit_vital_200s_display",
+        state: "on",
+        attributes: {},
+      },
+      "select.kitchen_levoit_vital_200s_fan_mode": {
+        entity_id: "select.kitchen_levoit_vital_200s_fan_mode",
+        state: "Auto",
+        attributes: { options: ["Auto", "Manual", "Sleep", "Pet"] },
+      },
+
+      /* --- 4. Master Suite: Xiaomi Air Purifier 4 Pro --- */
+      "fan.master_xiaomi_4_pro": {
+        entity_id: "fan.master_xiaomi_4_pro",
+        state: "on",
+        attributes: {
+          friendly_name: "Master Xiaomi 4 Pro",
+          percentage: 25,
+          percentage_step: 25,
+          preset_modes: ["auto", "sleep", "favorite"],
+          preset_mode: "sleep",
+        },
+      },
+      "sensor.master_xiaomi_4_pro_pm25": {
+        entity_id: "sensor.master_xiaomi_4_pro_pm25",
+        state: "6",
+        attributes: { unit_of_measurement: "µg/m³", device_class: "pm25" },
+      },
+      "sensor.master_xiaomi_4_pro_temperature": {
+        entity_id: "sensor.master_xiaomi_4_pro_temperature",
+        state: "20.4",
+        attributes: { unit_of_measurement: "°C", device_class: "temperature" },
+      },
+      "sensor.master_xiaomi_4_pro_humidity": {
+        entity_id: "sensor.master_xiaomi_4_pro_humidity",
+        state: "48",
+        attributes: { unit_of_measurement: "%", device_class: "humidity" },
+      },
+      "sensor.master_xiaomi_4_pro_filter_life": {
+        entity_id: "sensor.master_xiaomi_4_pro_filter_life",
+        state: "84",
+        attributes: { unit_of_measurement: "%" },
+      },
+      "switch.master_xiaomi_4_pro_display": {
+        entity_id: "switch.master_xiaomi_4_pro_display",
+        state: "off",
+        attributes: {},
+      },
+      "lock.master_xiaomi_4_pro_child_lock": {
+        entity_id: "lock.master_xiaomi_4_pro_child_lock",
+        state: "unlocked",
+        attributes: {},
+      },
+
+      /* --- 5. Nursery: IKEA Starkvind --- */
+      "fan.nursery_ikea_starkvind": {
+        entity_id: "fan.nursery_ikea_starkvind",
+        state: "on",
+        attributes: {
+          friendly_name: "Nursery IKEA Starkvind",
+          percentage: 33,
+          percentage_step: 20,
+          preset_modes: ["auto", "sleep", "manual"],
+          preset_mode: "auto",
+        },
+      },
+      "sensor.nursery_ikea_starkvind_pm25": {
+        entity_id: "sensor.nursery_ikea_starkvind_pm25",
+        state: "7",
+        attributes: { unit_of_measurement: "µg/m³", device_class: "pm25" },
+      },
+      "sensor.nursery_ikea_starkvind_filter_life": {
+        entity_id: "sensor.nursery_ikea_starkvind_filter_life",
+        state: "95",
+        attributes: { unit_of_measurement: "%" },
+      },
+      "switch.nursery_ikea_starkvind_child_lock": {
+        entity_id: "switch.nursery_ikea_starkvind_child_lock",
+        state: "on",
+        attributes: {},
+      },
+
+      /* --- 6. Office Air Monitor (Apollo AIR-1 / Multi-Sensor: CO, CO2, VOC, tVOC, PM2.5, PM10, Temp, Humidity) --- */
+      "sensor.office_air_pm25": {
+        entity_id: "sensor.office_air_pm25",
+        state: "14",
+        attributes: { unit_of_measurement: "µg/m³", device_class: "pm25", friendly_name: "Office PM2.5" },
+      },
+      "sensor.office_air_pm10": {
+        entity_id: "sensor.office_air_pm10",
+        state: "22",
+        attributes: { unit_of_measurement: "µg/m³", device_class: "pm10", friendly_name: "Office PM10" },
+      },
+      "sensor.office_air_co": {
+        entity_id: "sensor.office_air_co",
+        state: "2",
+        attributes: { unit_of_measurement: "ppm", device_class: "carbon_monoxide", friendly_name: "Office CO" },
+      },
+      "sensor.office_air_co2": {
+        entity_id: "sensor.office_air_co2",
+        state: "740",
+        attributes: { unit_of_measurement: "ppm", device_class: "carbon_dioxide", friendly_name: "Office CO₂" },
+      },
+      "sensor.office_air_voc": {
+        entity_id: "sensor.office_air_voc",
+        state: "110",
+        attributes: { unit_of_measurement: "idx", device_class: "volatile_organic_compounds", friendly_name: "Office VOC Index" },
+      },
+      "sensor.office_air_tvoc": {
+        entity_id: "sensor.office_air_tvoc",
+        state: "185",
+        attributes: { unit_of_measurement: "ppb", device_class: "volatile_organic_compounds_parts", friendly_name: "Office tVOC" },
+      },
+      "sensor.office_air_temperature": {
+        entity_id: "sensor.office_air_temperature",
+        state: "21.8",
+        attributes: { unit_of_measurement: "°C", device_class: "temperature", friendly_name: "Office Temperature" },
+      },
+      "sensor.office_air_humidity": {
+        entity_id: "sensor.office_air_humidity",
+        state: "46",
+        attributes: { unit_of_measurement: "%", device_class: "humidity", friendly_name: "Office Humidity" },
+      },
+
+      /* --- 7. Basement CO / CO2 / VOC / HCHO / Radon Monitor --- */
+      "sensor.basement_air_pm25": {
+        entity_id: "sensor.basement_air_pm25",
+        state: "19",
+        attributes: { unit_of_measurement: "µg/m³", device_class: "pm25", friendly_name: "Basement PM2.5" },
+      },
+      "sensor.basement_air_co": {
+        entity_id: "sensor.basement_air_co",
+        state: "4",
+        attributes: { unit_of_measurement: "ppm", device_class: "carbon_monoxide", friendly_name: "Basement CO" },
+      },
+      "sensor.basement_air_co2": {
+        entity_id: "sensor.basement_air_co2",
+        state: "1120",
+        attributes: { unit_of_measurement: "ppm", device_class: "carbon_dioxide", friendly_name: "Basement CO₂" },
+      },
+      "sensor.basement_air_voc": {
+        entity_id: "sensor.basement_air_voc",
+        state: "165",
+        attributes: { unit_of_measurement: "idx", device_class: "volatile_organic_compounds", friendly_name: "Basement VOC" },
+      },
+      "sensor.basement_air_hcho": {
+        entity_id: "sensor.basement_air_hcho",
+        state: "0.024",
+        attributes: { unit_of_measurement: "mg/m³", friendly_name: "Basement HCHO" },
+      },
+      "sensor.basement_air_radon": {
+        entity_id: "sensor.basement_air_radon",
+        state: "62",
+        attributes: { unit_of_measurement: "Bq/m³", friendly_name: "Basement Radon" },
+      },
+      "sensor.basement_air_temperature": {
+        entity_id: "sensor.basement_air_temperature",
+        state: "18.4",
+        attributes: { unit_of_measurement: "°C", device_class: "temperature", friendly_name: "Basement Temperature" },
+      },
+      "sensor.basement_air_humidity": {
+        entity_id: "sensor.basement_air_humidity",
+        state: "58",
+        attributes: { unit_of_measurement: "%", device_class: "humidity", friendly_name: "Basement Humidity" },
+      },
+
+      /* --- 8. Garage CO Detector (Zigbee / Matter CO Sensor) --- */
+      "sensor.garage_co": {
+        entity_id: "sensor.garage_co",
+        state: "6",
+        attributes: { unit_of_measurement: "ppm", device_class: "carbon_monoxide", friendly_name: "Garage CO" },
+      },
+      "binary_sensor.garage_co_alarm": {
+        entity_id: "binary_sensor.garage_co_alarm",
+        state: "off",
+        attributes: { device_class: "carbon_monoxide", friendly_name: "Garage CO Alarm" },
+      },
+      "sensor.garage_temperature": {
+        entity_id: "sensor.garage_temperature",
+        state: "15.2",
+        attributes: { unit_of_measurement: "°C", device_class: "temperature", friendly_name: "Garage Temperature" },
+      },
+      "sensor.garage_humidity": {
+        entity_id: "sensor.garage_humidity",
+        state: "52",
+        attributes: { unit_of_measurement: "%", device_class: "humidity", friendly_name: "Garage Humidity" },
+      },
+    };
+
+    function syncCadr(slug, pct, isOn) {
+      const cadrId = `sensor.${slug}_cadr`;
+      if (!states[cadrId]) return;
+      const maxCadr = baseCadr[slug] || 240;
+      const next = isOn ? Math.max(35, Math.round((maxCadr * (pct || 25)) / 100)) : 0;
+      states[cadrId] = { ...states[cadrId], state: String(next) };
+    }
+
+    const cardEntries = [];
+
+    function pushHass() {
+      const nextHass = {
+        states: { ...states },
+        locale: { language: currentLang },
+        callService,
+        callApi,
+      };
+      for (const entry of cardEntries) {
+        entry.el.hass = nextHass;
+      }
+    }
+
+    function applyThemeAndLang() {
+      document.body.dataset.demoTheme = currentTheme;
+      for (const entry of cardEntries) {
+        entry.el.setConfig({
+          ...entry.baseConfig,
+          theme: currentTheme,
+          language: currentLang,
+        });
+      }
+      pushHass();
+    }
+
+    function callService(domain, service, data = {}) {
+      const id = data.entity_id;
+      const ent = id ? states[id] : null;
+      if (!ent) return;
+
+      const slug = id.split(".")[1];
+
+      if (domain === "fan") {
+        if (service === "turn_on") {
+          const pct = ent.attributes.percentage > 0 ? ent.attributes.percentage : 50;
+          states[id] = {
+            ...ent,
+            state: "on",
+            attributes: { ...ent.attributes, percentage: pct },
+          };
+          syncCadr(slug, pct, true);
+          logActivity(`Turned on ${ent.attributes.friendly_name || slug}`);
+        } else if (service === "turn_off") {
+          states[id] = { ...ent, state: "off" };
+          syncCadr(slug, 0, false);
+          logActivity(`Turned off ${ent.attributes.friendly_name || slug}`);
+        } else if (service === "set_percentage") {
+          const pct = Number(data.percentage) || 0;
+          const isOn = pct > 0;
+          states[id] = {
+            ...ent,
+            state: isOn ? "on" : "off",
+            attributes: { ...ent.attributes, percentage: pct },
+          };
+          const modeSelectId = `select.${slug}_fan_mode`;
+          if (isOn && states[modeSelectId]?.attributes?.options?.includes("Manual")) {
+            states[modeSelectId] = { ...states[modeSelectId], state: "Manual" };
+          }
+          syncCadr(slug, pct, isOn);
+          logActivity(`Set ${ent.attributes.friendly_name || slug} speed → ${pct}%`);
+        } else if (service === "set_preset_mode") {
+          const mode = String(data.preset_mode);
+          const pct = mode.toLowerCase().includes("sleep")
+            ? 25
+            : mode.toLowerCase().includes("turbo") || mode.toLowerCase().includes("pet")
+            ? 100
+            : 50;
+          states[id] = {
+            ...ent,
+            state: "on",
+            attributes: { ...ent.attributes, preset_mode: mode, percentage: pct },
+          };
+          syncCadr(slug, pct, true);
+          logActivity(`Set ${ent.attributes.friendly_name || slug} mode → ${mode}`);
+        }
+      } else if (domain === "select" && service === "select_option") {
+        states[id] = { ...ent, state: String(data.option) };
+        if (slug.endsWith("_fan_mode")) {
+          const fanSlug = slug.replace(/_fan_mode$/, "");
+          const fanId = `fan.${fanSlug}`;
+          if (states[fanId]) {
+            const optLower = String(data.option).toLowerCase();
+            const pct = optLower.includes("sleep")
+              ? 25
+              : optLower.includes("pet")
+              ? 100
+              : optLower.includes("auto")
+              ? 50
+              : states[fanId].attributes.percentage || 50;
+            states[fanId] = {
+              ...states[fanId],
+              state: "on",
+              attributes: { ...states[fanId].attributes, percentage: pct, preset_mode: optLower },
+            };
+            syncCadr(fanSlug, pct, true);
+          }
+        }
+        logActivity(`Selected ${data.option} on ${ent.attributes.friendly_name || slug}`);
+      } else if (domain === "switch" || domain === "light") {
+        const nextState = service === "turn_on" ? "on" : "off";
+        states[id] = { ...ent, state: nextState };
+        logActivity(`${ent.attributes.friendly_name || slug} → ${nextState.toUpperCase()}`);
+      } else if (domain === "lock") {
+        const nextState = service === "lock" ? "locked" : "unlocked";
+        states[id] = { ...ent, state: nextState };
+        logActivity(`${ent.attributes.friendly_name || slug} → ${nextState}`);
+      } else if ((domain === "number" || domain === "input_number") && service === "set_value") {
+        const val = String(data.value);
+        states[id] = { ...ent, state: val };
+        const remId = `sensor.${slug}_remaining`;
+        if (states[remId]) {
+          states[remId] = { ...states[remId], state: val };
+        }
+        logActivity(`Timer → ${Number(val) > 0 ? `${val} min` : "Off"}`);
+      } else if (domain === "button" && service === "press") {
+        const base = slug.replace(/_(filter_reset|reset_filter|hepa_reset)$/, "");
+        const filterId = `sensor.${base}_filter_life`;
+        if (states[filterId]) {
+          states[filterId] = { ...states[filterId], state: "100" };
+        }
+        logActivity(`Filter reset → 100% (${base.replace(/_/g, " ")})`);
+      }
+
+      pushHass();
+    }
+
+    function mountCard(slotId, baseConfig) {
+      const el = document.createElement("dracula-air-quality-card");
+      el.setConfig({ ...baseConfig, theme: currentTheme, language: currentLang });
+      document.getElementById(slotId).appendChild(el);
+      cardEntries.push({ el, baseConfig });
+    }
+
+    /* --- Standard Card: Whole-Home Overview Mode (Grouped by type: 5 Purifiers + 3 AQ Sensors) --- */
+    mountCard("slot-overview", {
+      name: "Whole-Home Air Quality",
+      group_by: "type",
+      sort_by: "default",
+      show_sparklines: true,
+      outdoor_pm25_entity: "sensor.outdoor_pm25",
+      devices: [
+        { entity: "fan.bedroom_levoit_core_300s", name: "Bedroom · Core 300S", room: "Upstairs" },
+        { entity: "fan.living_room_levoit_core_400s", name: "Living Room · Core 400S", room: "Main Floor" },
+        { entity: "fan.kitchen_levoit_vital_200s", name: "Kitchen · Vital 200S", room: "Main Floor" },
+        { entity: "fan.master_xiaomi_4_pro", name: "Master · Xiaomi 4 Pro", room: "Upstairs" },
+        { entity: "fan.nursery_ikea_starkvind", name: "Nursery · IKEA Starkvind", room: "Upstairs" },
+        {
+          name: "Office Air Monitor",
+          room: "Main Floor",
+          sensors: {
+            pm25: "sensor.office_air_pm25",
+            pm10: "sensor.office_air_pm10",
+            co: "sensor.office_air_co",
+            co2: "sensor.office_air_co2",
+            voc: "sensor.office_air_voc",
+            tvoc: "sensor.office_air_tvoc",
+            temperature: "sensor.office_air_temperature",
+            humidity: "sensor.office_air_humidity",
+          },
+        },
+        {
+          name: "Basement CO/CO₂/VOC",
+          room: "Basement",
+          sensors: {
+            pm25: "sensor.basement_air_pm25",
+            co: "sensor.basement_air_co",
+            co2: "sensor.basement_air_co2",
+            voc: "sensor.basement_air_voc",
+            hcho: "sensor.basement_air_hcho",
+            radon: "sensor.basement_air_radon",
+            temperature: "sensor.basement_air_temperature",
+            humidity: "sensor.basement_air_humidity",
+          },
+        },
+        {
+          name: "Garage CO Detector",
+          room: "Garage",
+          sensors: {
+            co: "sensor.garage_co",
+            co_alarm: "binary_sensor.garage_co_alarm",
+            temperature: "sensor.garage_temperature",
+            humidity: "sensor.garage_humidity",
+          },
+        },
+      ],
+    });
+
+    /* --- Optional Card: Single Purifier Mode --- */
+    mountCard("slot-purifier", {
+      entity: "fan.bedroom_levoit_core_300s",
+      name: "Bedroom Core 300S",
+      show_cadr: true,
+      show_filter: true,
+      show_timer: true,
+      show_sparklines: true,
+    });
+
+    /* --- Optional Card: Standalone AQ Sensor Mode --- */
+    mountCard("slot-sensor", {
+      mode: "sensor",
+      name: "Office Air Monitor",
+      show_sparklines: true,
+      sensors: {
+        pm25: "sensor.office_air_pm25",
+        pm10: "sensor.office_air_pm10",
+        co: "sensor.office_air_co",
+        co2: "sensor.office_air_co2",
+        voc: "sensor.office_air_voc",
+        tvoc: "sensor.office_air_tvoc",
+        temperature: "sensor.office_air_temperature",
+        humidity: "sensor.office_air_humidity",
+      },
+    });
+
+    /* Theme switcher toolbar */
+    document.querySelectorAll("[data-theme-btn]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        currentTheme = btn.dataset.themeBtn;
+        document.querySelectorAll("[data-theme-btn]").forEach((b) => b.classList.toggle("active", b === btn));
+        applyThemeAndLang();
+        logActivity(`Theme → ${currentTheme}`);
+      });
+    });
+
+    /* Language switcher toolbar */
+    document.querySelectorAll("[data-lang-btn]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        currentLang = btn.dataset.langBtn;
+        document.querySelectorAll("[data-lang-btn]").forEach((b) => b.classList.toggle("active", b === btn));
+        applyThemeAndLang();
+        logActivity(`Language → ${currentLang.toUpperCase()}`);
+      });
+    });
+
+    /* Listen for hass-more-info events from any card */
+    document.addEventListener("hass-more-info", (e) => {
+      const entityId = e.detail?.entityId;
+      if (entityId) {
+        logActivity(`More-info: ${entityId}`);
+      }
+    });
+
+    pushHass();
+  </script>
+</body>
+</html>
