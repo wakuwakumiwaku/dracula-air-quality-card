@@ -493,8 +493,18 @@
       },
       "sensor.kitchen_levoit_vital_200s_filter_life": {
         entity_id: "sensor.kitchen_levoit_vital_200s_filter_life",
-        state: "64",
-        attributes: { unit_of_measurement: "%" },
+        state: "11",
+        attributes: { unit_of_measurement: "%", friendly_name: "Kitchen Filter Life" },
+      },
+      "button.kitchen_levoit_vital_200s_filter_reset": {
+        entity_id: "button.kitchen_levoit_vital_200s_filter_reset",
+        state: "unknown",
+        attributes: { friendly_name: "Kitchen Filter Reset" },
+      },
+      "sensor.outdoor_pm25": {
+        entity_id: "sensor.outdoor_pm25",
+        state: "6",
+        attributes: { unit_of_measurement: "µg/m³", device_class: "pm25", friendly_name: "Outdoor PM2.5" },
       },
       "switch.kitchen_levoit_vital_200s_display": {
         entity_id: "switch.kitchen_levoit_vital_200s_display",
@@ -808,6 +818,13 @@
           states[remId] = { ...states[remId], state: val };
         }
         logActivity(`Timer → ${Number(val) > 0 ? `${val} min` : "Off"}`);
+      } else if (domain === "button" && service === "press") {
+        const base = slug.replace(/_(filter_reset|reset_filter|hepa_reset)$/, "");
+        const filterId = `sensor.${base}_filter_life`;
+        if (states[filterId]) {
+          states[filterId] = { ...states[filterId], state: "100" };
+        }
+        logActivity(`Filter reset → 100% (${base.replace(/_/g, " ")})`);
       }
 
       pushHass();
@@ -826,6 +843,7 @@
       group_by: "type",
       sort_by: "default",
       show_sparklines: true,
+      outdoor_pm25_entity: "sensor.outdoor_pm25",
       devices: [
         { entity: "fan.bedroom_levoit_core_300s", name: "Bedroom · Core 300S", room: "Upstairs" },
         { entity: "fan.living_room_levoit_core_400s", name: "Living Room · Core 400S", room: "Main Floor" },
