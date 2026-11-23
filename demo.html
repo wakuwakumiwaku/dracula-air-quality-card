@@ -23,7 +23,44 @@
       color: #f8f8f2;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
       padding: 16px 22px 24px;
+      transition: background 0.2s ease, color 0.2s ease;
     }
+    body[data-demo-theme="dracula-soft"] {
+      background: #1e202b;
+    }
+    body[data-demo-theme="auto"] {
+      background: #f2f4f8;
+      color: #1c1f2b;
+      --ha-card-background: #ffffff;
+      --card-background-color: #ffffff;
+      --secondary-background-color: #f3f5f9;
+      --divider-color: rgba(28, 31, 43, 0.14);
+      --primary-text-color: #1c1f2b;
+      --secondary-text-color: #55607a;
+      --primary-color: #6c47d9;
+      --ha-card-box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
+    }
+    body[data-demo-theme="auto"] .brand h1,
+    body[data-demo-theme="auto"] .col-label .primary-title {
+      color: #1c1f2b;
+    }
+    body[data-demo-theme="auto"] .brand p {
+      color: #55607a;
+    }
+    body[data-demo-theme="auto"] .toolbar-group,
+    body[data-demo-theme="auto"] .status-pill {
+      background: #ffffff;
+      border-color: rgba(28, 31, 43, 0.14);
+      color: #55607a;
+    }
+    body[data-demo-theme="auto"] .seg-btn {
+      color: #55607a;
+    }
+    body[data-demo-theme="auto"] .seg-btn.active {
+      background: rgba(108, 71, 217, 0.14);
+      color: #6c47d9;
+    }
+
     .page-header {
       max-width: 1280px;
       margin: 0 auto 14px;
@@ -70,18 +107,53 @@
       font-size: 12px;
       color: #b8c0e0;
     }
-    .status-pill {
-      display: inline-flex;
+    .header-controls {
+      display: flex;
       align-items: center;
       gap: 8px;
-      padding: 6px 12px;
+      flex-wrap: wrap;
+      max-width: 100%;
+    }
+    .toolbar-group {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      padding: 3px;
       border-radius: 999px;
       background: #21222c;
       border: 1px solid rgba(98, 114, 164, 0.35);
-      font-size: 11.5px;
+    }
+    .seg-btn {
+      border: 0;
+      background: transparent;
+      color: #b8c0e0;
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 9px;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .seg-btn:hover {
+      color: #f8f8f2;
+    }
+    .seg-btn.active {
+      background: rgba(189, 147, 249, 0.24);
+      color: #f8f8f2;
+    }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 5px 11px;
+      border-radius: 999px;
+      background: #21222c;
+      border: 1px solid rgba(98, 114, 164, 0.35);
+      font-size: 11px;
       color: #b8c0e0;
       font-variant-numeric: tabular-nums;
-      max-width: 100%;
+      max-width: 240px;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -167,6 +239,9 @@
       .brand p {
         font-size: 11.5px;
       }
+      .status-pill {
+        max-width: 100%;
+      }
       .showcase-grid {
         grid-template-columns: minmax(0, 1fr);
         gap: 14px;
@@ -174,7 +249,7 @@
     }
   </style>
 </head>
-<body>
+<body data-demo-theme="dracula">
   <header class="page-header">
     <div class="brand">
       <div class="brand-badge" aria-hidden="true">
@@ -186,12 +261,26 @@
       </div>
       <div class="brand-text">
         <h1>Dracula Air Quality Card</h1>
-        <p>Whole-Home Air Quality Overview (Standard) · Plus Optional Single Purifier &amp; AQ Sensor Views</p>
+        <p>Whole-Home Overview (Standard) · 24h Sparklines · Themes &amp; i18n</p>
       </div>
     </div>
-    <div class="status-pill" id="activity-log">
-      <span class="status-dot"></span>
-      <span>Live mock Home Assistant state ready</span>
+
+    <div class="header-controls">
+      <div class="toolbar-group" role="group" aria-label="Theme">
+        <button type="button" class="seg-btn active" data-theme-btn="dracula">Dracula</button>
+        <button type="button" class="seg-btn" data-theme-btn="dracula-soft">Soft</button>
+        <button type="button" class="seg-btn" data-theme-btn="auto">Auto</button>
+      </div>
+      <div class="toolbar-group" role="group" aria-label="Language">
+        <button type="button" class="seg-btn active" data-lang-btn="en">EN</button>
+        <button type="button" class="seg-btn" data-lang-btn="de">DE</button>
+        <button type="button" class="seg-btn" data-lang-btn="fr">FR</button>
+        <button type="button" class="seg-btn" data-lang-btn="es">ES</button>
+      </div>
+      <div class="status-pill" id="activity-log">
+        <span class="status-dot"></span>
+        <span>Live mock HA ready</span>
+      </div>
     </div>
   </header>
 
@@ -229,6 +318,9 @@
       activityLog.innerHTML = `<span class="status-dot"></span><span>${msg}</span>`;
     }
 
+    let currentTheme = "dracula";
+    let currentLang = "en";
+
     const baseCadr = {
       bedroom_levoit_core_300s: 240,
       living_room_levoit_core_400s: 400,
@@ -236,6 +328,39 @@
       master_xiaomi_4_pro: 500,
       nursery_ikea_starkvind: 270,
     };
+
+    /* Realistic 24-hour hourly mock history series for SVG sparklines */
+    const historySeries = {
+      "sensor.bedroom_levoit_core_300s_pm25": [7, 6, 6, 5, 5, 4, 5, 6, 8, 7, 6, 5, 5, 4, 4, 5, 6, 5, 5, 6, 5, 5, 4, 5],
+      "sensor.living_room_levoit_core_400s_pm25": [8, 7, 7, 6, 6, 7, 10, 13, 15, 12, 10, 9, 8, 9, 11, 14, 12, 10, 9, 8, 9, 10, 9, 9],
+      "sensor.kitchen_levoit_vital_200s_pm25": [9, 8, 7, 7, 8, 12, 18, 14, 11, 10, 12, 24, 31, 19, 13, 11, 15, 29, 48, 54, 46, 41, 39, 38],
+      "sensor.master_xiaomi_4_pro_pm25": [8, 7, 6, 5, 5, 5, 6, 7, 9, 8, 7, 6, 6, 5, 5, 6, 7, 7, 6, 6, 5, 6, 6, 6],
+      "sensor.nursery_ikea_starkvind_pm25": [9, 8, 7, 7, 6, 6, 7, 8, 8, 7, 7, 6, 6, 7, 8, 7, 7, 6, 7, 8, 7, 7, 7, 7],
+      "sensor.office_air_pm25": [6, 6, 5, 5, 6, 7, 9, 11, 13, 15, 16, 15, 14, 13, 15, 17, 18, 16, 15, 14, 13, 14, 14, 14],
+      "sensor.office_air_co2": [460, 450, 445, 440, 445, 460, 510, 590, 680, 790, 860, 920, 810, 740, 820, 910, 950, 880, 790, 720, 690, 710, 730, 740],
+      "sensor.basement_air_pm25": [14, 14, 13, 13, 14, 15, 16, 17, 18, 19, 20, 21, 19, 18, 18, 19, 20, 21, 20, 19, 18, 19, 19, 19],
+      "sensor.basement_air_co2": [720, 740, 760, 780, 810, 850, 890, 940, 990, 1040, 1080, 1110, 1090, 1060, 1080, 1130, 1160, 1180, 1150, 1130, 1110, 1100, 1115, 1120],
+      "sensor.garage_co": [2, 2, 1, 1, 2, 2, 3, 11, 14, 8, 5, 3, 2, 2, 3, 4, 9, 12, 8, 6, 5, 5, 6, 6],
+    };
+
+    function callApi(method, path) {
+      if (method === "GET" && typeof path === "string" && path.startsWith("history/period/")) {
+        const qIndex = path.indexOf("?");
+        const params = new URLSearchParams(qIndex >= 0 ? path.slice(qIndex + 1) : "");
+        const entityId = params.get("filter_entity_id");
+        const pts = historySeries[entityId];
+        if (pts && pts.length) {
+          const now = Date.now();
+          const series = pts.map((v, i) => ({
+            state: String(v),
+            last_changed: new Date(now - (pts.length - 1 - i) * 3600000).toISOString(),
+          }));
+          return Promise.resolve([series]);
+        }
+        return Promise.resolve([[]]);
+      }
+      return Promise.resolve([]);
+    }
 
     const states = {
       /* --- 1. Bedroom: Levoit Core 300S (ESPHome / VeSync style) --- */
@@ -568,16 +693,30 @@
       states[cadrId] = { ...states[cadrId], state: String(next) };
     }
 
-    const cards = [];
+    const cardEntries = [];
 
     function pushHass() {
       const nextHass = {
         states: { ...states },
+        locale: { language: currentLang },
         callService,
+        callApi,
       };
-      for (const card of cards) {
-        card.hass = nextHass;
+      for (const entry of cardEntries) {
+        entry.el.hass = nextHass;
       }
+    }
+
+    function applyThemeAndLang() {
+      document.body.dataset.demoTheme = currentTheme;
+      for (const entry of cardEntries) {
+        entry.el.setConfig({
+          ...entry.baseConfig,
+          theme: currentTheme,
+          language: currentLang,
+        });
+      }
+      pushHass();
     }
 
     function callService(domain, service, data = {}) {
@@ -674,45 +813,19 @@
       pushHass();
     }
 
-    /* --- Mount Card 1: Purifier Mode --- */
-    const purifierCard = document.createElement("dracula-air-quality-card");
-    purifierCard.setConfig({
-      entity: "fan.bedroom_levoit_core_300s",
-      name: "Bedroom Core 300S",
-      theme: "dracula",
-      show_cadr: true,
-      show_filter: true,
-      show_timer: true,
-    });
-    document.getElementById("slot-purifier").appendChild(purifierCard);
-    cards.push(purifierCard);
+    function mountCard(slotId, baseConfig) {
+      const el = document.createElement("dracula-air-quality-card");
+      el.setConfig({ ...baseConfig, theme: currentTheme, language: currentLang });
+      document.getElementById(slotId).appendChild(el);
+      cardEntries.push({ el, baseConfig });
+    }
 
-    /* --- Mount Card 2: Standalone AQ Sensor Mode (CO, CO2, VOC, tVOC, PM2.5, PM10, Temp, Humidity) --- */
-    const sensorCard = document.createElement("dracula-air-quality-card");
-    sensorCard.setConfig({
-      mode: "sensor",
-      name: "Office Air Monitor",
-      theme: "dracula",
-      sensors: {
-        pm25: "sensor.office_air_pm25",
-        pm10: "sensor.office_air_pm10",
-        co: "sensor.office_air_co",
-        co2: "sensor.office_air_co2",
-        voc: "sensor.office_air_voc",
-        tvoc: "sensor.office_air_tvoc",
-        temperature: "sensor.office_air_temperature",
-        humidity: "sensor.office_air_humidity",
-      },
-    });
-    document.getElementById("slot-sensor").appendChild(sensorCard);
-    cards.push(sensorCard);
-
-    /* --- Mount Card 3: Whole-Home Overview Mode (Grouped by type: 5 Purifiers + 3 AQ Sensors) --- */
-    const overviewCard = document.createElement("dracula-air-quality-card");
-    overviewCard.setConfig({
+    /* --- Standard Card: Whole-Home Overview Mode (Grouped by type: 5 Purifiers + 3 AQ Sensors) --- */
+    mountCard("slot-overview", {
       name: "Whole-Home Air Quality",
-      theme: "dracula",
       group_by: "type",
+      sort_by: "default",
+      show_sparklines: true,
       devices: [
         { entity: "fan.bedroom_levoit_core_300s", name: "Bedroom · Core 300S", room: "Upstairs" },
         { entity: "fan.living_room_levoit_core_400s", name: "Living Room · Core 400S", room: "Main Floor" },
@@ -759,14 +872,59 @@
         },
       ],
     });
-    document.getElementById("slot-overview").appendChild(overviewCard);
-    cards.push(overviewCard);
+
+    /* --- Optional Card: Single Purifier Mode --- */
+    mountCard("slot-purifier", {
+      entity: "fan.bedroom_levoit_core_300s",
+      name: "Bedroom Core 300S",
+      show_cadr: true,
+      show_filter: true,
+      show_timer: true,
+      show_sparklines: true,
+    });
+
+    /* --- Optional Card: Standalone AQ Sensor Mode --- */
+    mountCard("slot-sensor", {
+      mode: "sensor",
+      name: "Office Air Monitor",
+      show_sparklines: true,
+      sensors: {
+        pm25: "sensor.office_air_pm25",
+        pm10: "sensor.office_air_pm10",
+        co: "sensor.office_air_co",
+        co2: "sensor.office_air_co2",
+        voc: "sensor.office_air_voc",
+        tvoc: "sensor.office_air_tvoc",
+        temperature: "sensor.office_air_temperature",
+        humidity: "sensor.office_air_humidity",
+      },
+    });
+
+    /* Theme switcher toolbar */
+    document.querySelectorAll("[data-theme-btn]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        currentTheme = btn.dataset.themeBtn;
+        document.querySelectorAll("[data-theme-btn]").forEach((b) => b.classList.toggle("active", b === btn));
+        applyThemeAndLang();
+        logActivity(`Theme → ${currentTheme}`);
+      });
+    });
+
+    /* Language switcher toolbar */
+    document.querySelectorAll("[data-lang-btn]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        currentLang = btn.dataset.langBtn;
+        document.querySelectorAll("[data-lang-btn]").forEach((b) => b.classList.toggle("active", b === btn));
+        applyThemeAndLang();
+        logActivity(`Language → ${currentLang.toUpperCase()}`);
+      });
+    });
 
     /* Listen for hass-more-info events from any card */
     document.addEventListener("hass-more-info", (e) => {
       const entityId = e.detail?.entityId;
       if (entityId) {
-        logActivity(`More-info dialog: ${entityId}`);
+        logActivity(`More-info: ${entityId}`);
       }
     });
 

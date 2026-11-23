@@ -6,7 +6,152 @@
  *   3. Standalone Air Quality Sensor Mode (Optional — PM2.5, PM10, PM1, AQI, CO, CO2, VOC/tVOC, NOx, NO2, O3, HCHO, Radon, Temp, Humidity, Pressure)
  */
 
-const CARD_VERSION = "1.1.0";
+const CARD_VERSION = "1.2.0";
+
+const HISTORY_TTL_MS = 5 * 60 * 1000;
+const HISTORY_CACHE = new Map();
+const HISTORY_INFLIGHT = new Set();
+const ROLLING_HISTORY = new Map();
+
+const I18N = {
+  en: {
+    good: "Good", moderate: "Moderate", sensitive: "Sensitive", unhealthy: "Unhealthy",
+    hazardous: "Hazardous", poor: "Poor", very_poor: "Very Poor", elevated: "Elevated",
+    dangerous: "Dangerous", critical: "Critical", no_data: "No Data", running: "Running",
+    standby: "Standby", off: "Off", offline: "Offline", unavailable: "Unavailable",
+    whole_home_title: "Whole-Home Air Quality", air_purifiers: "Air Purifiers",
+    air_quality_sensors: "Air Quality Sensors", air_quality_monitor: "Air Quality Monitor",
+    air_quality_status: "Air Quality Status", all: "All", purifiers: "Purifiers", sensors: "Sensors",
+    all_auto: "All Auto", all_sleep: "All Sleep", all_off: "All Off",
+    active: "Active", purifiers_on: "Purifiers on", avg_pm25: "Avg PM2.5",
+    worst_pm25: "Worst PM2.5", max_co2: "Max CO₂", co_warning: "CO Warning",
+    filter_life: "Filter Life", filter_low: "Filter Low", replace: "Replace",
+    mode: "Mode", auto_profile: "Auto Profile", fan_speed: "Fan Speed",
+    display: "Display", lock: "Lock", timer: "Timer", trend_24h: "24h Trend",
+    sort_default: "Order", sort_pm25: "Worst PM2.5", sort_filter: "Low Filter", sort_name: "Name",
+    devices_word: "devices", device_word: "device", sensors_monitored: "sensors monitored",
+  },
+  de: {
+    good: "Gut", moderate: "Mäßig", sensitive: "Sensibel", unhealthy: "Ungesund",
+    hazardous: "Gefährlich", poor: "Schlecht", very_poor: "Sehr schlecht", elevated: "Erhöht",
+    dangerous: "Gefährlich", critical: "Kritisch", no_data: "Keine Daten", running: "Aktiv",
+    standby: "Bereitschaft", off: "Aus", offline: "Offline", unavailable: "Nicht verfügbar",
+    whole_home_title: "Luftqualität Zuhause", air_purifiers: "Luftreiniger",
+    air_quality_sensors: "Luftsensoren", air_quality_monitor: "Luftqualitätsmonitor",
+    air_quality_status: "Luftqualität", all: "Alle", purifiers: "Reiniger", sensors: "Sensoren",
+    all_auto: "Alle Auto", all_sleep: "Alle Schlaf", all_off: "Alle Aus",
+    active: "Aktiv", purifiers_on: "Reiniger an", avg_pm25: "Ø PM2.5",
+    worst_pm25: "Max PM2.5", max_co2: "Max CO₂", co_warning: "CO-Warnung",
+    filter_life: "Filterstand", filter_low: "Filter niedrig", replace: "Wechseln",
+    mode: "Modus", auto_profile: "Auto-Profil", fan_speed: "Lüfterstufe",
+    display: "Display", lock: "Sperre", timer: "Timer", trend_24h: "24h Verlauf",
+    sort_default: "Standard", sort_pm25: "PM2.5 hoch", sort_filter: "Filter niedrig", sort_name: "Name",
+    devices_word: "Geräte", device_word: "Gerät", sensors_monitored: "Sensoren aktiv",
+  },
+  fr: {
+    good: "Bon", moderate: "Modéré", sensitive: "Sensible", unhealthy: "Malsain",
+    hazardous: "Dangereux", poor: "Médiocre", very_poor: "Très mauvais", elevated: "Élevé",
+    dangerous: "Dangereux", critical: "Critique", no_data: "Aucune donnée", running: "Actif",
+    standby: "Veille", off: "Arrêt", offline: "Hors ligne", unavailable: "Indisponible",
+    whole_home_title: "Qualité de l'Air", air_purifiers: "Purificateurs",
+    air_quality_sensors: "Capteurs d'Air", air_quality_monitor: "Moniteur d'Air",
+    air_quality_status: "Qualité de l'Air", all: "Tous", purifiers: "Purificateurs", sensors: "Capteurs",
+    all_auto: "Tous Auto", all_sleep: "Tous Nuit", all_off: "Tous Arrêt",
+    active: "Actifs", purifiers_on: "En marche", avg_pm25: "PM2.5 moy.",
+    worst_pm25: "PM2.5 max", max_co2: "CO₂ max", co_warning: "Alerte CO",
+    filter_life: "Filtre", filter_low: "Filtre bas", replace: "Remplacer",
+    mode: "Mode", auto_profile: "Profil Auto", fan_speed: "Vitesse",
+    display: "Écran", lock: "Verrou", timer: "Minuterie", trend_24h: "Tendance 24h",
+    sort_default: "Ordre", sort_pm25: "PM2.5 max", sort_filter: "Filtre bas", sort_name: "Nom",
+    devices_word: "appareils", device_word: "appareil", sensors_monitored: "capteurs suivis",
+  },
+  es: {
+    good: "Bueno", moderate: "Moderado", sensitive: "Sensible", unhealthy: "Insalubre",
+    hazardous: "Peligroso", poor: "Deficiente", very_poor: "Muy malo", elevated: "Elevado",
+    dangerous: "Peligroso", critical: "Crítico", no_data: "Sin datos", running: "Activo",
+    standby: "En espera", off: "Apagado", offline: "Desconectado", unavailable: "No disponible",
+    whole_home_title: "Calidad del Aire", air_purifiers: "Purificadores",
+    air_quality_sensors: "Sensores de Aire", air_quality_monitor: "Monitor de Aire",
+    air_quality_status: "Estado del Aire", all: "Todos", purifiers: "Purificadores", sensors: "Sensores",
+    all_auto: "Todos Auto", all_sleep: "Todos Noche", all_off: "Apagar Todos",
+    active: "Activos", purifiers_on: "Encendidos", avg_pm25: "PM2.5 prom.",
+    worst_pm25: "PM2.5 máx.", max_co2: "CO₂ máx.", co_warning: "Alerta CO",
+    filter_life: "Vida Filtro", filter_low: "Filtro bajo", replace: "Cambiar",
+    mode: "Modo", auto_profile: "Perfil Auto", fan_speed: "Velocidad",
+    display: "Pantalla", lock: "Bloqueo", timer: "Temporizador", trend_24h: "Tendencia 24h",
+    sort_default: "Orden", sort_pm25: "Peor PM2.5", sort_filter: "Filtro bajo", sort_name: "Nombre",
+    devices_word: "dispositivos", device_word: "dispositivo", sensors_monitored: "sensores activos",
+  },
+};
+
+function resolveLang(configLang, hass) {
+  const raw =
+    configLang && configLang !== "auto"
+      ? configLang
+      : hass?.locale?.language || hass?.language || "en";
+  const code = String(raw || "en").slice(0, 2).toLowerCase();
+  return I18N[code] ? code : "en";
+}
+
+function tr(lang, key) {
+  return (I18N[lang] && I18N[lang][key]) || I18N.en[key] || key;
+}
+
+function recordRollingPoint(entityId, num) {
+  if (!entityId || num === null || num === undefined || !Number.isFinite(num)) return;
+  let arr = ROLLING_HISTORY.get(entityId);
+  if (!arr) {
+    arr = [];
+    ROLLING_HISTORY.set(entityId, arr);
+  }
+  if (arr.length === 0 || arr[arr.length - 1] !== num) {
+    arr.push(num);
+    if (arr.length > 48) arr.shift();
+  }
+}
+
+function downsamplePoints(nums, maxLen = 36) {
+  if (nums.length <= maxLen) return nums;
+  const step = (nums.length - 1) / (maxLen - 1);
+  const out = [];
+  for (let i = 0; i < maxLen; i++) {
+    out.push(nums[Math.round(i * step)]);
+  }
+  return out;
+}
+
+function getEntityHistory(hass, entityId, onLoaded) {
+  if (!entityId) return [];
+  const cached = HISTORY_CACHE.get(entityId);
+  const now = Date.now();
+  if (cached && now - cached.ts < HISTORY_TTL_MS) {
+    return cached.points;
+  }
+  if (typeof hass?.callApi === "function" && !HISTORY_INFLIGHT.has(entityId)) {
+    HISTORY_INFLIGHT.add(entityId);
+    const startIso = new Date(now - 24 * 3600 * 1000).toISOString();
+    const path = `history/period/${startIso}?filter_entity_id=${encodeURIComponent(entityId)}&minimal_response&no_attributes`;
+    Promise.resolve(hass.callApi("GET", path))
+      .then((res) => {
+        const series = Array.isArray(res) && Array.isArray(res[0]) ? res[0] : Array.isArray(res) ? res : [];
+        const pts = [];
+        for (const item of series) {
+          const val = toNumber(typeof item === "object" ? item.state ?? item.v : item);
+          if (val !== null) pts.push(val);
+        }
+        const sampled = downsamplePoints(pts, 36);
+        HISTORY_CACHE.set(entityId, { ts: Date.now(), points: sampled });
+        if (sampled.length >= 2 && typeof onLoaded === "function") onLoaded();
+      })
+      .catch(() => {
+        HISTORY_CACHE.set(entityId, { ts: Date.now(), points: [] });
+      })
+      .finally(() => {
+        HISTORY_INFLIGHT.delete(entityId);
+      });
+  }
+  return cached?.points?.length ? cached.points : ROLLING_HISTORY.get(entityId) || [];
+}
 
 const SENSOR_KEYS = [
   "pm25",
@@ -266,35 +411,55 @@ function getFanPrefixes(fanEntityId) {
   return stripped && stripped !== slug ? [stripped, slug] : [slug];
 }
 
-function evaluatePM25(val) {
-  const n = toNumber(val);
-  if (n === null) return { label: "No Data", level: "muted", color: "var(--daq-muted)", pct: 0 };
-  const pct = Math.min(100, Math.max(4, (n / 75) * 100));
-  if (n <= 12) return { label: "Good", level: "good", color: "var(--daq-green)", pct };
-  if (n <= 35) return { label: "Moderate", level: "moderate", color: "var(--daq-yellow)", pct };
-  if (n <= 55) return { label: "Sensitive", level: "sensitive", color: "var(--daq-orange)", pct };
-  if (n <= 150) return { label: "Unhealthy", level: "unhealthy", color: "var(--daq-red)", pct: Math.min(100, (n / 150) * 100) };
-  return { label: "Hazardous", level: "hazardous", color: "var(--daq-pink)", pct: 100 };
+function parseThresholds(raw, defaults) {
+  if (!raw) return defaults;
+  if (Array.isArray(raw)) {
+    return defaults.map((d, i) => (toNumber(raw[i]) !== null ? Number(raw[i]) : d));
+  }
+  return defaults;
 }
 
-function evaluateCO(val) {
+function evaluatePM25(val, thresholds = null, lang = "en") {
   const n = toNumber(val);
-  if (n === null) return { label: "No Data", level: "muted", color: "var(--daq-muted)", pct: 0 };
-  const pct = Math.min(100, Math.max(4, (n / 100) * 100));
-  if (n <= 9) return { label: "Good", level: "good", color: "var(--daq-green)", pct };
-  if (n <= 35) return { label: "Elevated", level: "moderate", color: "var(--daq-yellow)", pct };
-  if (n <= 70) return { label: "Dangerous", level: "sensitive", color: "var(--daq-orange)", pct };
-  return { label: "Critical", level: "unhealthy", color: "var(--daq-red)", pct: 100 };
+  if (n === null) return { label: tr(lang, "no_data"), level: "muted", color: "var(--daq-muted)", pct: 0 };
+  const t = thresholds?.pm25;
+  const [g, m, s, u] = Array.isArray(t)
+    ? parseThresholds(t, [12, 35, 55, 150])
+    : [t?.good ?? 12, t?.moderate ?? 35, t?.sensitive ?? 55, t?.unhealthy ?? 150];
+  const pct = Math.min(100, Math.max(4, (n / Math.max(s * 1.35, 75)) * 100));
+  if (n <= g) return { label: tr(lang, "good"), level: "good", color: "var(--daq-green)", pct };
+  if (n <= m) return { label: tr(lang, "moderate"), level: "moderate", color: "var(--daq-yellow)", pct };
+  if (n <= s) return { label: tr(lang, "sensitive"), level: "sensitive", color: "var(--daq-orange)", pct };
+  if (n <= u) return { label: tr(lang, "unhealthy"), level: "unhealthy", color: "var(--daq-red)", pct: Math.min(100, (n / u) * 100) };
+  return { label: tr(lang, "hazardous"), level: "hazardous", color: "var(--daq-pink)", pct: 100 };
 }
 
-function evaluateCO2(val) {
+function evaluateCO(val, thresholds = null, lang = "en") {
   const n = toNumber(val);
-  if (n === null) return { label: "No Data", level: "muted", color: "var(--daq-muted)", pct: 0 };
-  const pct = Math.min(100, Math.max(6, ((n - 400) / 1600) * 100));
-  if (n <= 800) return { label: "Good", level: "good", color: "var(--daq-green)", pct };
-  if (n <= 1200) return { label: "Moderate", level: "moderate", color: "var(--daq-yellow)", pct };
-  if (n <= 1800) return { label: "Poor", level: "sensitive", color: "var(--daq-orange)", pct };
-  return { label: "Very Poor", level: "unhealthy", color: "var(--daq-red)", pct: 100 };
+  if (n === null) return { label: tr(lang, "no_data"), level: "muted", color: "var(--daq-muted)", pct: 0 };
+  const t = thresholds?.co;
+  const [g, e, d] = Array.isArray(t)
+    ? parseThresholds(t, [9, 35, 70])
+    : [t?.good ?? 9, t?.elevated ?? 35, t?.dangerous ?? 70];
+  const pct = Math.min(100, Math.max(4, (n / Math.max(d * 1.4, 100)) * 100));
+  if (n <= g) return { label: tr(lang, "good"), level: "good", color: "var(--daq-green)", pct };
+  if (n <= e) return { label: tr(lang, "elevated"), level: "moderate", color: "var(--daq-yellow)", pct };
+  if (n <= d) return { label: tr(lang, "dangerous"), level: "sensitive", color: "var(--daq-orange)", pct };
+  return { label: tr(lang, "critical"), level: "unhealthy", color: "var(--daq-red)", pct: 100 };
+}
+
+function evaluateCO2(val, thresholds = null, lang = "en") {
+  const n = toNumber(val);
+  if (n === null) return { label: tr(lang, "no_data"), level: "muted", color: "var(--daq-muted)", pct: 0 };
+  const t = thresholds?.co2;
+  const [g, m, p] = Array.isArray(t)
+    ? parseThresholds(t, [800, 1200, 1800])
+    : [t?.good ?? 800, t?.moderate ?? 1200, t?.poor ?? 1800];
+  const pct = Math.min(100, Math.max(6, ((n - 400) / Math.max(p - 200, 1600)) * 100));
+  if (n <= g) return { label: tr(lang, "good"), level: "good", color: "var(--daq-green)", pct };
+  if (n <= m) return { label: tr(lang, "moderate"), level: "moderate", color: "var(--daq-yellow)", pct };
+  if (n <= p) return { label: tr(lang, "poor"), level: "sensitive", color: "var(--daq-orange)", pct };
+  return { label: tr(lang, "very_poor"), level: "unhealthy", color: "var(--daq-red)", pct: 100 };
 }
 
 function evaluateVOC(val, unit = "") {
@@ -357,13 +522,13 @@ function evaluateAQI(val) {
   return { label: "Hazardous", level: "hazardous", color: "var(--daq-pink)", pct: 100 };
 }
 
-function evaluateMetricColor(key, val, unit = "") {
+function evaluateMetricColor(key, val, unit = "", thresholds = null) {
   const n = toNumber(val);
   if (n === null) return "var(--daq-muted)";
   const u = String(unit || "").toLowerCase().trim();
   switch (key) {
     case "pm25":
-      return evaluatePM25(n).color;
+      return evaluatePM25(n, thresholds).color;
     case "pm10":
       if (n <= 54) return "var(--daq-green)";
       if (n <= 154) return "var(--daq-yellow)";
@@ -377,9 +542,9 @@ function evaluateMetricColor(key, val, unit = "") {
     case "aqi":
       return evaluateAQI(n).color;
     case "co":
-      return evaluateCO(n).color;
+      return evaluateCO(n, thresholds).color;
     case "co2":
-      return evaluateCO2(n).color;
+      return evaluateCO2(n, thresholds).color;
     case "voc":
     case "tvoc":
       return evaluateVOC(n, unit).color;
@@ -548,10 +713,12 @@ function resolveDeviceState(hass, itemConfig, discoveryCache = null) {
     const entityId = findEntity(explicitId, key);
     const st = entityId ? states[entityId] : null;
     if (st && !isUnavailable(st.state)) {
+      const numVal = toNumber(st.state);
+      if (numVal !== null) recordRollingPoint(entityId, numVal);
       sensors[key] = {
         entityId,
         raw: st.state,
-        num: toNumber(st.state),
+        num: numVal,
         unit: st.attributes?.unit_of_measurement ?? SENSOR_META[key].defaultUnit,
       };
     } else if (explicitId) {
@@ -748,6 +915,25 @@ const CARD_STYLES = `
     --daq-red: #ff5555;
     --daq-radius: 16px;
     --daq-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  }
+
+  :host([data-theme="dracula-soft"]) {
+    --daq-bg: #2d303e;
+    --daq-surface: #252734;
+    --daq-surface-2: #36394b;
+    --daq-current: #494d64;
+    --daq-border: rgba(139, 150, 196, 0.24);
+    --daq-fg: #eef0f7;
+    --daq-subtext: #b7bfd9;
+    --daq-muted: #7b86b0;
+    --daq-purple: #b89bf2;
+    --daq-pink: #f08cc8;
+    --daq-cyan: #89dce8;
+    --daq-green: #69e28c;
+    --daq-yellow: #e8ee9a;
+    --daq-orange: #f2b77a;
+    --daq-red: #f06e6e;
+    --daq-shadow: 0 6px 20px rgba(0, 0, 0, 0.22);
   }
 
   :host([data-theme="auto"]) {
@@ -1503,6 +1689,64 @@ const CARD_STYLES = `
     color: #ff6e6e;
   }
 
+  /* 24h Inline SVG Sparkline */
+  .sparkline-box {
+    background: var(--daq-surface);
+    border: 1px solid var(--daq-border);
+    border-radius: 12px;
+    padding: 8px 11px 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    cursor: pointer;
+    transition: border-color 0.15s ease;
+  }
+  .sparkline-box:hover { border-color: var(--daq-purple); }
+  .sparkline-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 10.5px;
+    color: var(--daq-subtext);
+  }
+  .sparkline-title {
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--daq-muted);
+  }
+  .sparkline-range {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+  }
+  .sparkline-svg {
+    width: 100%;
+    height: 36px;
+    display: block;
+    overflow: visible;
+  }
+
+  /* Overview Toolbar (Filter Tabs + Sort Selector) */
+  .overview-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .sort-select {
+    background: var(--daq-surface);
+    color: var(--daq-subtext);
+    border: 1px solid var(--daq-border);
+    border-radius: 9px;
+    padding: 4px 9px;
+    font-size: 11.5px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  .sort-select:hover { border-color: var(--daq-purple); color: var(--daq-fg); }
+
   /* Responsive: narrow cards & mobile viewports */
   @container (max-width: 390px) {
     .card { padding: 14px 12px; gap: 11px; }
@@ -1544,12 +1788,14 @@ class DraculaAirQualityCard extends HTMLElement {
     this._expanded = new Set();
     this._collapsedGroups = new Set();
     this._filter = "all";
+    this._sortBy = null;
     this._discoveryCache = new Map();
     this._lastStateCount = -1;
     this._lastRenderSig = null;
     this._watchedIds = [];
     this._boundClick = this._onClick.bind(this);
     this._boundKeydown = this._onKeydown.bind(this);
+    this._boundChange = this._onChange.bind(this);
   }
 
   static getConfigElement() {
@@ -1630,20 +1876,40 @@ class DraculaAirQualityCard extends HTMLElement {
 
     this._config = {
       theme: "dracula",
+      language: "auto",
       compact: false,
       show_cadr: true,
       show_filter: true,
       show_timer: true,
+      show_sparklines: true,
       group_by: "type",
+      sort_by: "default",
       ...config,
     };
 
+    this._sortBy = null;
     this._discoveryCache.clear();
     this._lastStateCount = -1;
     this._lastRenderSig = null;
     this._watchedIds = [];
-    this.setAttribute("data-theme", this._config.theme === "auto" ? "auto" : "dracula");
+    const themeAttr =
+      this._config.theme === "auto" || this._config.theme === "dracula-soft"
+        ? this._config.theme
+        : "dracula";
+    this.setAttribute("data-theme", themeAttr);
     this._render();
+  }
+
+  get _lang() {
+    return resolveLang(this._config?.language, this._hass);
+  }
+
+  _t(key) {
+    return tr(this._lang, key);
+  }
+
+  get _thresholds() {
+    return this._config?.thresholds || null;
   }
 
   set hass(hass) {
@@ -1664,7 +1930,8 @@ class DraculaAirQualityCard extends HTMLElement {
   }
 
   _computeRenderSignature(states) {
-    let sig = `${this._filter}|${[...this._expanded].join(",")}|${[...this._collapsedGroups].join(",")}`;
+    const activeSort = this._sortBy || this._config?.sort_by || "default";
+    let sig = `${this._lang}|${this._filter}|${activeSort}|${[...this._expanded].join(",")}|${[...this._collapsedGroups].join(",")}`;
     for (let i = 0; i < this._watchedIds.length; i++) {
       const id = this._watchedIds[i];
       const st = states[id];
@@ -1715,6 +1982,7 @@ class DraculaAirQualityCard extends HTMLElement {
   connectedCallback() {
     this.shadowRoot.addEventListener("click", this._boundClick);
     this.shadowRoot.addEventListener("keydown", this._boundKeydown);
+    this.shadowRoot.addEventListener("change", this._boundChange);
     this._lastRenderSig = null;
     this._render();
   }
@@ -1722,6 +1990,17 @@ class DraculaAirQualityCard extends HTMLElement {
   disconnectedCallback() {
     this.shadowRoot.removeEventListener("click", this._boundClick);
     this.shadowRoot.removeEventListener("keydown", this._boundKeydown);
+    this.shadowRoot.removeEventListener("change", this._boundChange);
+  }
+
+  _onChange(e) {
+    const target = e.target.closest("[data-action]");
+    if (!target) return;
+    if (target.dataset.action === "sort") {
+      this._sortBy = target.value || "default";
+      this._lastRenderSig = null;
+      this._render();
+    }
   }
 
   _onKeydown(e) {
@@ -1964,9 +2243,58 @@ class DraculaAirQualityCard extends HTMLElement {
     `;
   }
 
+  _renderSparkline(entityId, label, unit, color) {
+    if (this._config?.show_sparklines === false || !entityId) return "";
+    const pts = getEntityHistory(this._hass, entityId, () => {
+      this._lastRenderSig = null;
+      this._render();
+    });
+    if (!pts || pts.length < 2) return "";
+
+    const min = Math.min(...pts);
+    const max = Math.max(...pts);
+    const span = max - min || 1;
+    const w = 240;
+    const h = 36;
+    const padY = 4;
+
+    const coords = pts.map((v, i) => {
+      const x = (i / (pts.length - 1)) * w;
+      const y = h - padY - ((v - min) / span) * (h - padY * 2);
+      return [x, y];
+    });
+    const linePts = coords.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+    const areaPts = `0,${h} ${linePts} ${w},${h}`;
+    const [lastX, lastY] = coords[coords.length - 1];
+    const gradId = `sp-${entityId.replace(/[^a-zA-Z0-9]/g, "_")}`;
+
+    return `
+      <div class="sparkline-box" role="button" tabindex="0" title="Click for history"
+        data-action="more-info" data-entity="${escapeHtml(entityId)}">
+        <div class="sparkline-head">
+          <span class="sparkline-title">${escapeHtml(label)} · ${escapeHtml(this._t("trend_24h"))}</span>
+          <span class="sparkline-range">${formatNum(min, 0)}–${formatNum(max, 0)} ${escapeHtml(unit)}</span>
+        </div>
+        <svg class="sparkline-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="${color}" stop-opacity="0.32" />
+              <stop offset="100%" stop-color="${color}" stop-opacity="0.02" />
+            </linearGradient>
+          </defs>
+          <polygon points="${areaPts}" fill="url(#${gradId})" />
+          <polyline points="${linePts}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          <circle cx="${lastX.toFixed(1)}" cy="${lastY.toFixed(1)}" r="3" fill="${color}" />
+        </svg>
+      </div>
+    `;
+  }
+
   _pickHeroMetric(dev) {
+    const th = this._thresholds;
+    const lang = this._lang;
     if (dev.coDanger && dev.sensors.co && dev.sensors.co.num !== null) {
-      const ev = evaluateCO(dev.sensors.co.num);
+      const ev = evaluateCO(dev.sensors.co.num, th, lang);
       return {
         key: "co",
         metricLabel: "CO",
@@ -1977,7 +2305,7 @@ class DraculaAirQualityCard extends HTMLElement {
       };
     }
     if (dev.sensors.pm25 && dev.sensors.pm25.num !== null) {
-      const ev = evaluatePM25(dev.sensors.pm25.num);
+      const ev = evaluatePM25(dev.sensors.pm25.num, th, lang);
       return {
         key: "pm25",
         metricLabel: "PM2.5",
@@ -1988,7 +2316,7 @@ class DraculaAirQualityCard extends HTMLElement {
       };
     }
     if (dev.sensors.co2 && dev.sensors.co2.num !== null) {
-      const ev = evaluateCO2(dev.sensors.co2.num);
+      const ev = evaluateCO2(dev.sensors.co2.num, th, lang);
       return {
         key: "co2",
         metricLabel: "CO₂",
@@ -1999,7 +2327,7 @@ class DraculaAirQualityCard extends HTMLElement {
       };
     }
     if (dev.sensors.co && dev.sensors.co.num !== null) {
-      const ev = evaluateCO(dev.sensors.co.num);
+      const ev = evaluateCO(dev.sensors.co.num, th, lang);
       return {
         key: "co",
         metricLabel: "CO",
@@ -2067,7 +2395,7 @@ class DraculaAirQualityCard extends HTMLElement {
           .map((key) => {
             const s = sensors[key];
             const meta = SENSOR_META[key];
-            const color = evaluateMetricColor(key, s.num ?? s.raw, s.unit);
+            const color = evaluateMetricColor(key, s.num ?? s.raw, s.unit, this._thresholds);
             const valStr =
               s.num !== null
                 ? formatNum(s.num, meta.decimals)
@@ -2107,7 +2435,7 @@ class DraculaAirQualityCard extends HTMLElement {
     if (dev.modes.length) {
       html += `
         <div>
-          <div class="section-label">Mode</div>
+          <div class="section-label">${escapeHtml(this._t("mode"))}</div>
           <div class="pill-group">
             ${dev.modes
               .map((m) => {
@@ -2124,7 +2452,7 @@ class DraculaAirQualityCard extends HTMLElement {
     if (dev.autoMode && dev.autoMode.options.length && (isAutoActive || !dev.modes.length)) {
       html += `
         <div>
-          <div class="section-label">Auto Profile</div>
+          <div class="section-label">${escapeHtml(this._t("auto_profile"))}</div>
           <div class="pill-group">
             ${dev.autoMode.options
               .map((opt) => {
@@ -2142,8 +2470,8 @@ class DraculaAirQualityCard extends HTMLElement {
       html += `
         <div class="speed-wrap">
           <div class="speed-head">
-            <span class="section-label" style="margin:0">Fan Speed</span>
-            <span class="speed-val">${dev.isOn ? `${Math.round(currentPct)}%` : "Off"}</span>
+            <span class="section-label" style="margin:0">${escapeHtml(this._t("fan_speed"))}</span>
+            <span class="speed-val">${dev.isOn ? `${Math.round(currentPct)}%` : escapeHtml(this._t("off"))}</span>
           </div>
           <div class="speed-steps" style="grid-template-columns: repeat(${steps.length}, 1fr)">
             ${steps
@@ -2168,17 +2496,17 @@ class DraculaAirQualityCard extends HTMLElement {
         <div class="utility-bar">
           ${
             dev.display
-              ? `<button class="pill-btn xs ${dev.display.on ? "active-cyan" : ""}" data-action="display" ${idxAttr}>${ICONS.display} Display</button>`
+              ? `<button class="pill-btn xs ${dev.display.on ? "active-cyan" : ""}" data-action="display" ${idxAttr}>${ICONS.display} ${escapeHtml(this._t("display"))}</button>`
               : ""
           }
           ${
             dev.childLock
-              ? `<button class="pill-btn xs ${dev.childLock.on ? "active" : ""}" data-action="child-lock" ${idxAttr}>${dev.childLock.on ? ICONS.lock : ICONS.unlock} Lock</button>`
+              ? `<button class="pill-btn xs ${dev.childLock.on ? "active" : ""}" data-action="child-lock" ${idxAttr}>${dev.childLock.on ? ICONS.lock : ICONS.unlock} ${escapeHtml(this._t("lock"))}</button>`
               : ""
           }
           ${
             showTimer && dev.timer
-              ? `<button class="pill-btn xs ${dev.timerLabel ? "active-cyan" : ""}" data-action="timer" ${idxAttr}>${ICONS.timer} ${dev.timerLabel ? escapeHtml(dev.timerLabel) : "Timer"}</button>`
+              ? `<button class="pill-btn xs ${dev.timerLabel ? "active-cyan" : ""}" data-action="timer" ${idxAttr}>${ICONS.timer} ${dev.timerLabel ? escapeHtml(dev.timerLabel) : escapeHtml(this._t("timer"))}</button>`
               : showTimer && dev.timerLabel
               ? `<span class="stat-chip" data-action="more-info" data-entity="${escapeHtml(dev.timerRemaining?.entityId || "")}">${ICONS.timer} <span class="v">${escapeHtml(dev.timerLabel)}</span></span>`
               : ""
@@ -2201,9 +2529,9 @@ class DraculaAirQualityCard extends HTMLElement {
 
     const statusParts = [];
     if (dev.isUnavailable) {
-      statusParts.push("Unavailable");
+      statusParts.push(this._t("unavailable"));
     } else if (!dev.isOn) {
-      statusParts.push("Standby");
+      statusParts.push(this._t("standby"));
     } else {
       if (dev.currentMode) statusParts.push(titleCase(dev.currentMode));
       if (dev.currentMode?.toLowerCase().includes("auto") && dev.autoMode?.current) {
@@ -2279,7 +2607,7 @@ class DraculaAirQualityCard extends HTMLElement {
               showFilter && dev.filter && dev.filter.num !== null
                 ? `<div class="filter-block" data-action="more-info" data-entity="${escapeHtml(dev.filter.entityId)}">
                     <div class="filter-top">
-                      <span class="filter-label">${ICONS.filter} Filter Life${dev.filterLow ? " (Replace)" : ""}</span>
+                      <span class="filter-label">${ICONS.filter} ${escapeHtml(this._t("filter_life"))}${dev.filterLow ? ` (${escapeHtml(this._t("replace"))})` : ""}</span>
                       <span class="filter-pct" style="color: ${filterColor}">${Math.round(filterPct)}%</span>
                     </div>
                     <div class="bar-track">
@@ -2291,6 +2619,7 @@ class DraculaAirQualityCard extends HTMLElement {
           </div>
         </div>
 
+        ${dev.sensors.pm25?.entityId ? this._renderSparkline(dev.sensors.pm25.entityId, "PM2.5", dev.sensors.pm25.unit || "µg/m³", hero.color) : ""}
         ${Object.keys(extraSensors).length ? this._renderMetricTiles(extraSensors) : ""}
         ${this._renderPurifierControls(dev)}
       </div>
@@ -2305,12 +2634,18 @@ class DraculaAirQualityCard extends HTMLElement {
     const hero = this._pickHeroMetric(dev);
     const sensorCount = Object.keys(dev.sensors).length;
 
+    const sparkTarget = dev.sensors.pm25?.entityId
+      ? { id: dev.sensors.pm25.entityId, label: "PM2.5", unit: dev.sensors.pm25.unit || "µg/m³", color: evaluatePM25(dev.sensors.pm25.num, this._thresholds, this._lang).color }
+      : dev.sensors.co2?.entityId
+      ? { id: dev.sensors.co2.entityId, label: "CO₂", unit: dev.sensors.co2.unit || "ppm", color: evaluateCO2(dev.sensors.co2.num, this._thresholds, this._lang).color }
+      : null;
+
     return `
       <div class="card ${this._config.compact ? "compact" : ""}">
         <div class="header">
           <div class="title-wrap">
             <div class="title">${escapeHtml(dev.name)}</div>
-            <div class="subtitle">${sensorCount} ${sensorCount === 1 ? "sensor" : "sensors"} monitored</div>
+            <div class="subtitle">${sensorCount} ${escapeHtml(this._t("sensors_monitored"))}</div>
           </div>
           <div class="header-actions">
             <div class="health-pill" style="color: ${hero.color}">
@@ -2325,21 +2660,22 @@ class DraculaAirQualityCard extends HTMLElement {
         <div class="hero">
           ${this._renderGaugeSVG(hero.valueText, hero.unitText, hero.metricLabel, hero.pct, hero.color, hero.entityId)}
           <div class="hero-details">
-            <div class="section-label" style="margin:0">Air Quality Status</div>
+            <div class="section-label" style="margin:0">${escapeHtml(this._t("air_quality_status"))}</div>
             <div style="font-size:13px;color:var(--daq-subtext);line-height:1.4">
               ${
                 hero.key === "co"
-                  ? `Primary reading based on Carbon Monoxide (${escapeHtml(hero.label)}).`
+                  ? `CO · ${escapeHtml(hero.label)}`
                   : hero.key === "pm25"
-                  ? `Primary reading based on PM2.5 particulate matter (${escapeHtml(hero.label)}).`
+                  ? `PM2.5 · ${escapeHtml(hero.label)}`
                   : hero.key === "co2"
-                  ? `Primary reading based on CO₂ concentration (${escapeHtml(hero.label)}).`
-                  : `Live environmental air quality readings.`
+                  ? `CO₂ · ${escapeHtml(hero.label)}`
+                  : escapeHtml(hero.label)
               }
             </div>
           </div>
         </div>
 
+        ${sparkTarget ? this._renderSparkline(sparkTarget.id, sparkTarget.label, sparkTarget.unit, sparkTarget.color) : ""}
         ${
           sensorCount
             ? this._renderMetricTiles(dev.sensors)
@@ -2384,11 +2720,32 @@ class DraculaAirQualityCard extends HTMLElement {
       ? coAlertRooms.reduce((max, e) => ((e.dev.sensors.co?.num ?? 999) > (max.dev.sensors.co?.num ?? 999) ? e : max), coAlertRooms[0]).dev
       : null;
 
-    const avgPmEval = evaluatePM25(avgPm);
-    const worstPmEval = evaluatePM25(worstPmRoom?.sensors.pm25.num ?? null);
-    const maxCo2Eval = evaluateCO2(maxCo2Room?.sensors.co2.num ?? null);
+    const avgPmEval = evaluatePM25(avgPm, this._thresholds, this._lang);
+    const worstPmEval = evaluatePM25(worstPmRoom?.sensors.pm25.num ?? null, this._thresholds, this._lang);
+    const maxCo2Eval = evaluateCO2(maxCo2Room?.sensors.co2.num ?? null, this._thresholds, this._lang);
 
     const activeFilter = hasBothTypes ? this._filter : "all";
+    const activeSort = this._sortBy || this._config.sort_by || "default";
+    const sortEntries = (list) => {
+      if (activeSort === "default") return list;
+      return [...list].sort((a, b) => {
+        if (activeSort === "pm25") {
+          const av = a.dev.sensors.pm25?.num ?? -1;
+          const bv = b.dev.sensors.pm25?.num ?? -1;
+          return bv - av;
+        }
+        if (activeSort === "filter") {
+          const av = a.dev.filter?.num ?? 999;
+          const bv = b.dev.filter?.num ?? 999;
+          return av - bv;
+        }
+        if (activeSort === "name") {
+          return a.dev.name.localeCompare(b.dev.name);
+        }
+        return 0;
+      });
+    };
+
     const visible = devices.filter((e) => {
       if (activeFilter === "purifiers") return e.dev.isPurifier;
       if (activeFilter === "sensors") return !e.dev.isPurifier;
@@ -2397,16 +2754,17 @@ class DraculaAirQualityCard extends HTMLElement {
 
     const renderGroup = (gKey, label, items) => {
       const collapsed = this._collapsedGroups.has(gKey);
+      const sorted = sortEntries(items);
       return `
         <div class="group-section ${collapsed ? "collapsed" : ""}">
           <button type="button" class="group-header" data-action="toggle-group" data-value="${escapeHtml(gKey)}" aria-expanded="${!collapsed}">
-            <span>${escapeHtml(label)} · ${items.length}</span>
+            <span>${escapeHtml(label)} · ${sorted.length}</span>
             <span class="g-chev">${ICONS.chevron}</span>
           </button>
           ${
             collapsed
               ? ""
-              : `<div class="room-list">${items.map((e) => this._renderOverviewRow(e.dev, e.idx)).join("")}</div>`
+              : `<div class="room-list">${sorted.map((e) => this._renderOverviewRow(e.dev, e.idx)).join("")}</div>`
           }
         </div>
       `;
@@ -2418,7 +2776,7 @@ class DraculaAirQualityCard extends HTMLElement {
         return `<div class="empty-state">Add purifiers or air quality sensors to <code>devices</code>.</div>`;
       }
       if (groupBy === "none") {
-        return `<div class="room-list">${visible.map((e) => this._renderOverviewRow(e.dev, e.idx)).join("")}</div>`;
+        return `<div class="room-list">${sortEntries(visible).map((e) => this._renderOverviewRow(e.dev, e.idx)).join("")}</div>`;
       }
       if (groupBy === "room") {
         const groups = new Map();
@@ -2435,26 +2793,26 @@ class DraculaAirQualityCard extends HTMLElement {
       const pList = visible.filter((e) => e.dev.isPurifier);
       const sList = visible.filter((e) => !e.dev.isPurifier);
       const sections = [];
-      if (pList.length) sections.push(renderGroup("type:purifiers", "Air Purifiers", pList));
-      if (sList.length) sections.push(renderGroup("type:sensors", "Air Quality Sensors", sList));
+      if (pList.length) sections.push(renderGroup("type:purifiers", this._t("air_purifiers"), pList));
+      if (sList.length) sections.push(renderGroup("type:sensors", this._t("air_quality_sensors"), sList));
       return sections.join("");
     };
 
-    const cardTitle = this._config.name || "Whole-Home Air Quality";
+    const cardTitle = this._config.name || this._t("whole_home_title");
 
     return `
       <div class="card ${this._config.compact ? "compact" : ""}">
         <div class="header">
           <div class="title-wrap">
             <div class="title">${escapeHtml(cardTitle)}</div>
-            <div class="subtitle">${devices.length} ${devices.length === 1 ? "device" : "devices"} · ${purifiers.length} purifiers${sensorOnly.length ? ` · ${sensorOnly.length} sensors` : ""}</div>
+            <div class="subtitle">${devices.length} ${escapeHtml(devices.length === 1 ? this._t("device_word") : this._t("devices_word"))} · ${purifiers.length} ${escapeHtml(this._t("purifiers").toLowerCase())}${sensorOnly.length ? ` · ${sensorOnly.length} ${escapeHtml(this._t("sensors").toLowerCase())}` : ""}</div>
           </div>
           ${
             purifiers.length
               ? `<div class="master-bar">
-                  <button class="pill-btn xs" data-action="master" data-value="auto">All Auto</button>
-                  <button class="pill-btn xs" data-action="master" data-value="sleep">All Sleep</button>
-                  <button class="pill-btn xs" data-action="master" data-value="off">All Off</button>
+                  <button class="pill-btn xs" data-action="master" data-value="auto">${escapeHtml(this._t("all_auto"))}</button>
+                  <button class="pill-btn xs" data-action="master" data-value="sleep">${escapeHtml(this._t("all_sleep"))}</button>
+                  <button class="pill-btn xs" data-action="master" data-value="off">${escapeHtml(this._t("all_off"))}</button>
                 </div>`
               : ""
           }
@@ -2462,24 +2820,24 @@ class DraculaAirQualityCard extends HTMLElement {
 
         <div class="summary-strip">
           <div class="summary-tile">
-            <span class="summary-k">Active</span>
+            <span class="summary-k">${escapeHtml(this._t("active"))}</span>
             <span class="summary-v" style="color: ${activePurifiers > 0 ? "var(--daq-purple)" : "var(--daq-muted)"}">${activePurifiers}/${purifiers.length}</span>
-            <span class="summary-sub">Purifiers on</span>
+            <span class="summary-sub">${escapeHtml(this._t("purifiers_on"))}</span>
           </div>
           <div class="summary-tile">
-            <span class="summary-k">Avg PM2.5</span>
+            <span class="summary-k">${escapeHtml(this._t("avg_pm25"))}</span>
             <span class="summary-v" style="color: ${avgPmEval.color}">${avgPm !== null ? `${formatNum(avgPm, 1)}` : "—"}</span>
-            <span class="summary-sub">${avgPm !== null ? `µg/m³ · ${avgPmEval.label}` : "No data"}</span>
+            <span class="summary-sub">${avgPm !== null ? `µg/m³ · ${escapeHtml(avgPmEval.label)}` : escapeHtml(this._t("no_data"))}</span>
           </div>
           <div class="summary-tile">
-            <span class="summary-k">Worst PM2.5</span>
+            <span class="summary-k">${escapeHtml(this._t("worst_pm25"))}</span>
             <span class="summary-v" style="color: ${worstPmEval.color}">${worstPmRoom ? formatNum(worstPmRoom.sensors.pm25.num, 0) : "—"}</span>
-            <span class="summary-sub">${worstPmRoom ? escapeHtml(worstPmRoom.name) : "No data"}</span>
+            <span class="summary-sub">${worstPmRoom ? escapeHtml(worstPmRoom.name) : escapeHtml(this._t("no_data"))}</span>
           </div>
           ${
             maxCo2Room
               ? `<div class="summary-tile">
-                  <span class="summary-k">Max CO₂</span>
+                  <span class="summary-k">${escapeHtml(this._t("max_co2"))}</span>
                   <span class="summary-v" style="color: ${maxCo2Eval.color}">${formatNum(maxCo2Room.sensors.co2.num, 0)}</span>
                   <span class="summary-sub">${escapeHtml(maxCo2Room.name)} · ppm</span>
                 </div>`
@@ -2488,7 +2846,7 @@ class DraculaAirQualityCard extends HTMLElement {
           ${
             worstCoRoom
               ? `<div class="summary-tile alert">
-                  <span class="summary-k" style="color:var(--daq-red)">CO Warning</span>
+                  <span class="summary-k" style="color:var(--daq-red)">${escapeHtml(this._t("co_warning"))}</span>
                   <span class="summary-v" style="color:var(--daq-red)">${worstCoRoom.sensors.co?.num !== null && worstCoRoom.sensors.co?.num !== undefined ? `${formatNum(worstCoRoom.sensors.co.num, 0)} ppm` : "ALARM"}</span>
                   <span class="summary-sub">${escapeHtml(worstCoRoom.name)}</span>
                 </div>`
@@ -2496,15 +2854,27 @@ class DraculaAirQualityCard extends HTMLElement {
           }
         </div>
 
-        ${
-          hasBothTypes
-            ? `<div class="filter-tabs" role="tablist">
-                <button class="filter-tab ${activeFilter === "all" ? "active" : ""}" data-action="filter" data-value="all">All (${devices.length})</button>
-                <button class="filter-tab ${activeFilter === "purifiers" ? "active" : ""}" data-action="filter" data-value="purifiers">Purifiers (${purifiers.length})</button>
-                <button class="filter-tab ${activeFilter === "sensors" ? "active" : ""}" data-action="filter" data-value="sensors">Sensors (${sensorOnly.length})</button>
-              </div>`
-            : ""
-        }
+        <div class="overview-toolbar">
+          ${
+            hasBothTypes
+              ? `<div class="filter-tabs" role="tablist">
+                  <button class="filter-tab ${activeFilter === "all" ? "active" : ""}" data-action="filter" data-value="all">${escapeHtml(this._t("all"))} (${devices.length})</button>
+                  <button class="filter-tab ${activeFilter === "purifiers" ? "active" : ""}" data-action="filter" data-value="purifiers">${escapeHtml(this._t("purifiers"))} (${purifiers.length})</button>
+                  <button class="filter-tab ${activeFilter === "sensors" ? "active" : ""}" data-action="filter" data-value="sensors">${escapeHtml(this._t("sensors"))} (${sensorOnly.length})</button>
+                </div>`
+              : `<span></span>`
+          }
+          ${
+            devices.length > 1
+              ? `<select class="sort-select" data-action="sort" aria-label="Sort devices">
+                  <option value="default" ${activeSort === "default" ? "selected" : ""}>↕ ${escapeHtml(this._t("sort_default"))}</option>
+                  <option value="pm25" ${activeSort === "pm25" ? "selected" : ""}>↕ ${escapeHtml(this._t("sort_pm25"))}</option>
+                  <option value="filter" ${activeSort === "filter" ? "selected" : ""}>↕ ${escapeHtml(this._t("sort_filter"))}</option>
+                  <option value="name" ${activeSort === "name" ? "selected" : ""}>↕ ${escapeHtml(this._t("sort_name"))}</option>
+                </select>`
+              : ""
+          }
+        </div>
 
         ${renderRows()}
       </div>
@@ -2605,6 +2975,13 @@ class DraculaAirQualityCard extends HTMLElement {
                           <div class="bar-fill" style="width: ${filterPct}%; background: ${filterColor}"></div>
                         </div>
                       </div>`
+                    : ""
+                }
+                ${
+                  dev.sensors.pm25?.entityId
+                    ? this._renderSparkline(dev.sensors.pm25.entityId, "PM2.5", dev.sensors.pm25.unit || "µg/m³", pmEval?.color || "var(--daq-purple)")
+                    : dev.sensors.co2?.entityId
+                    ? this._renderSparkline(dev.sensors.co2.entityId, "CO₂", dev.sensors.co2.unit || "ppm", co2Eval?.color || "var(--daq-cyan)")
                     : ""
                 }
                 ${Object.keys(dev.sensors).length ? this._renderMetricTiles(dev.sensors) : ""}
@@ -2740,18 +3117,32 @@ class DraculaAirQualityCardEditor extends HTMLElement {
             <label>Theme</label>
             <select id="theme">
               <option value="dracula" ${(this._config.theme || "dracula") === "dracula" ? "selected" : ""}>Dracula</option>
+              <option value="dracula-soft" ${this._config.theme === "dracula-soft" ? "selected" : ""}>Dracula Soft</option>
               <option value="auto" ${this._config.theme === "auto" ? "selected" : ""}>Auto (HA Theme)</option>
             </select>
           </div>
         </div>
 
-        <div class="field">
-          <label>Name (optional)</label>
-          <input type="text" id="name" value="${escapeHtml(this._config.name || "")}" placeholder="Auto from entity" />
+        <div class="row">
+          <div class="field">
+            <label>Name (optional)</label>
+            <input type="text" id="name" value="${escapeHtml(this._config.name || "")}" placeholder="Auto from entity" />
+          </div>
+          <div class="field">
+            <label>Language</label>
+            <select id="language">
+              <option value="auto" ${(this._config.language || "auto") === "auto" ? "selected" : ""}>Auto (HA Locale)</option>
+              <option value="en" ${this._config.language === "en" ? "selected" : ""}>English</option>
+              <option value="de" ${this._config.language === "de" ? "selected" : ""}>Deutsch</option>
+              <option value="fr" ${this._config.language === "fr" ? "selected" : ""}>Français</option>
+              <option value="es" ${this._config.language === "es" ? "selected" : ""}>Español</option>
+            </select>
+          </div>
         </div>
 
         <div class="checks">
           <label class="check"><input type="checkbox" id="compact" ${this._config.compact ? "checked" : ""} /> Compact</label>
+          <label class="check"><input type="checkbox" id="show_sparklines" ${this._config.show_sparklines !== false ? "checked" : ""} /> 24h Sparklines</label>
           ${
             mode === "purifier"
               ? `
@@ -2803,13 +3194,24 @@ class DraculaAirQualityCardEditor extends HTMLElement {
           mode === "overview"
             ? `
           <div class="section">
-            <div class="field">
-              <label>Group Devices By</label>
-              <select id="group_by">
-                <option value="type" ${(this._config.group_by || "type") === "type" ? "selected" : ""}>Type (Air Purifiers / Air Quality Sensors)</option>
-                <option value="room" ${this._config.group_by === "room" ? "selected" : ""}>Room / Group</option>
-                <option value="none" ${this._config.group_by === "none" ? "selected" : ""}>None (Flat list)</option>
-              </select>
+            <div class="row">
+              <div class="field">
+                <label>Group Devices By</label>
+                <select id="group_by">
+                  <option value="type" ${(this._config.group_by || "type") === "type" ? "selected" : ""}>Type (Purifiers / Sensors)</option>
+                  <option value="room" ${this._config.group_by === "room" ? "selected" : ""}>Room / Group</option>
+                  <option value="none" ${this._config.group_by === "none" ? "selected" : ""}>None (Flat list)</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Sort Devices By</label>
+                <select id="sort_by">
+                  <option value="default" ${(this._config.sort_by || "default") === "default" ? "selected" : ""}>Default Order</option>
+                  <option value="pm25" ${this._config.sort_by === "pm25" ? "selected" : ""}>Worst PM2.5</option>
+                  <option value="filter" ${this._config.sort_by === "filter" ? "selected" : ""}>Lowest Filter</option>
+                  <option value="name" ${this._config.sort_by === "name" ? "selected" : ""}>Name (A–Z)</option>
+                </select>
+              </div>
             </div>
             <div class="section-title">Rooms / Devices</div>
             <datalist id="fan-list">${fanEntities.map((id) => `<option value="${escapeHtml(id)}">`).join("")}</datalist>
@@ -2870,7 +3272,10 @@ class DraculaAirQualityCardEditor extends HTMLElement {
     });
 
     on("theme", "change", (e) => this._emit({ ...this._config, theme: e.target.value }));
+    on("language", "change", (e) => this._emit({ ...this._config, language: e.target.value }));
     on("group_by", "change", (e) => this._emit({ ...this._config, group_by: e.target.value }));
+    on("sort_by", "change", (e) => this._emit({ ...this._config, sort_by: e.target.value }));
+    on("show_sparklines", "change", (e) => this._emit({ ...this._config, show_sparklines: e.target.checked }));
     on("name", "change", (e) => {
       const next = { ...this._config };
       if (e.target.value) next.name = e.target.value;

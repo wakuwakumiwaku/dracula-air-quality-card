@@ -14,16 +14,18 @@ A zero-dependency Home Assistant Lovelace custom card built around a **Whole-Hom
   - Live summary strip showing **Active Purifiers**, **Average PM2.5**, **Worst PM2.5**, **Max CO₂**, and a red **CO Warning** tile if any sensor detects elevated CO (`>= 35 ppm`) or an active CO/gas alarm.
   - One-tap master controls (**All Auto**, **All Sleep**, **All Off**) across all purifiers.
   - Native **`group_by`** sections (`type`, `room`, or `none`) with collapsible group headers (`Air Purifiers · N`, `Air Quality Sensors · N`) and **`All | Purifiers | Sensors`** filter tabs.
-  - Compact expandable room rows that scale cleanly to 10+ rooms with inline purifier controls and full sensor drawers.
+  - **Smart Sorting (`sort_by`)** — Sort rooms within each group by worst PM2.5 (`pm25`), lowest filter life (`filter`), or alphabetically (`name`), with a live sort selector in the header.
+  - Compact expandable room rows that scale cleanly to 10+ rooms with inline purifier controls, 24h trend sparklines, and full sensor drawers.
+- **Inline 24h SVG Sparklines** — Enabled by default (`show_sparklines: true`). Fetches 24-hour history via Home Assistant's history API with a 5-minute per-entity cache (plus an in-memory rolling fallback) and renders smooth gradient sparklines in Purifier Mode, Standalone AQ Sensor Mode, and expanded Overview drawers.
 - **Optional Single-Device Modes** — When you want a dedicated card for one device:
-  - **Single Purifier Mode (Optional)** — Hero PM2.5 gauge ring, health status pill, fan speed & operating mode controls, auto profile selector, CADR readout, filter life bar with low-filter warning, display & child lock toggles, and sleep timer.
-  - **Standalone Air Quality Sensor Mode (Optional)** — Hero PM2.5 / CO₂ / AQI gauge ring with clickable metric tiles for **PM2.5, PM10, PM1.0, AQI, CO, CO₂, VOC, tVOC, NOₓ, NO₂, O₃, HCHO (Formaldehyde), Radon, Temperature, Humidity, and Pressure**, plus prominent red safety banners for elevated CO or active `co_alarm` / `gas_alarm` sensors.
+  - **Single Purifier Mode (Optional)** — Hero PM2.5 gauge ring, 24h sparkline, health status pill, fan speed & operating mode controls, auto profile selector, CADR readout, filter life bar with low-filter warning, display & child lock toggles, and sleep timer.
+  - **Standalone Air Quality Sensor Mode (Optional)** — Hero PM2.5 / CO₂ / AQI gauge ring, 24h sparkline, and clickable metric tiles for **PM2.5, PM10, PM1.0, AQI, CO, CO₂, VOC, tVOC, NOₓ, NO₂, O₃, HCHO (Formaldehyde), Radon, Temperature, Humidity, and Pressure**, plus prominent red safety banners for elevated CO or active `co_alarm` / `gas_alarm` sensors.
+- **Custom Thresholds** — Override default WHO/EPA warning and danger breakpoints for `pm25`, `co2`, and `co` with `thresholds`.
 - **Smart Auto-Discovery** — Point any purifier entry at a `fan.*` entity to discover sibling sensors and controls automatically by entity naming conventions **and** Home Assistant `device_class` (`carbon_monoxide`, `carbon_dioxide`, `volatile_organic_compounds`, `volatile_organic_compounds_parts`, `nitrogen_dioxide`, `ozone`, etc.), with attribute fallbacks and per-entity overrides.
-- **Health & Safety Thresholds** — Color-coded severity bands for PM2.5 (WHO/EPA), CO (`<= 9`, `<= 35`, `<= 70`, `> 70` ppm), CO₂ (`<= 800`, `<= 1200`, `<= 1800`, `> 1800` ppm), unit-aware VOC/tVOC (VOC Index, `ppb`, `µg/m³`), HCHO, Radon (`Bq/m³` / `pCi/L`), NO₂, and O₃.
+- **Dracula, Dracula Soft & Auto Themes** — Choose `theme: "dracula"` (default), `theme: "dracula-soft"` (low-glare slate-purple), or `theme: "auto"` to inherit your active Home Assistant light/dark theme variables.
+- **Built-in Localization (i18n)** — Auto-detects your Home Assistant language (`language: "auto"`) with built-in translations for **English (`en`)**, **German (`de`)**, **French (`fr`)**, and **Spanish (`es`)**.
 - **Fast & Responsive** — Lightweight state fingerprinting skips redundant Shadow DOM re-renders on unrelated Home Assistant ticks, while CSS `@container` queries keep layouts crisp from narrow 360px mobile screens to wide desktop dashboards.
-- **Interactive History Graphs** — Click any gauge or metric tile to open Home Assistant's native `more-info` history dialog.
-- **Dracula & Theme-Aware Styling** — Ships with the Dracula dark palette by default (`theme: "dracula"`), or set `theme: "auto"` to inherit your active Home Assistant light/dark theme variables.
-- **Visual Editor Included** — Full Lovelace UI configuration editor (`dracula-air-quality-card-editor`) defaulting to Whole-Home Overview, with zero external dependencies.
+- **Interactive History Graphs & Visual Editor** — Click any gauge, sparkline, or metric tile to open Home Assistant's native `more-info` dialog, and configure everything visually with `dracula-air-quality-card-editor`.
 
 ## Supported Purifiers & Air Quality Sensors
 
@@ -70,12 +72,16 @@ Works out of the box with:
 
 Adding the card through the Home Assistant UI automatically opens in **Whole-Home Overview** mode and pre-populates your discovered purifiers and air quality sensors.
 
-Here is a complete YAML example combining 5 air purifiers and 3 standalone air quality / CO monitors with `group_by: type` (default):
+Here is a complete YAML example combining 5 air purifiers and 3 standalone air quality / CO monitors with `group_by: type`, sorting, 24h sparklines, and auto language detection:
 
 ```yaml
 type: custom:dracula-air-quality-card
 name: Whole-Home Air Quality
+theme: dracula
+language: auto
 group_by: type
+sort_by: pm25
+show_sparklines: true
 devices:
   - entity: fan.bedroom_levoit_core_300s
     name: Bedroom · Core 300S
@@ -126,6 +132,36 @@ devices:
 - **Group by type (`group_by: type`, default):** Separates devices into collapsible **Air Purifiers** and **Air Quality Sensors** sections and displays `All | Purifiers | Sensors` filter tabs.
 - **Group by room (`group_by: room`):** Groups entries by each item's `room` (or `group`) label, falling back to `"Other"`.
 - **Flat list (`group_by: none`):** Shows all devices in a single list without section headers.
+- **Sorting (`sort_by`):** Choose `default` (configured order), `pm25` (worst PM2.5 first), `filter` (lowest filter life first), or `name` (A–Z). Users can also switch sort order on the fly from the Overview header.
+
+### Custom Thresholds, Soft Theme & Language
+
+Override the default WHO/EPA color breakpoints or pick a softer palette and explicit UI language:
+
+```yaml
+type: custom:dracula-air-quality-card
+name: Whole-Home Air Quality
+theme: dracula-soft
+language: de
+show_sparklines: true
+thresholds:
+  pm25:
+    good: 10
+    moderate: 25
+    sensitive: 50
+    unhealthy: 100
+  co2:
+    good: 750
+    moderate: 1100
+    poor: 1600
+  co:
+    good: 9
+    elevated: 30
+    dangerous: 60
+devices:
+  - fan.bedroom_levoit_core_300s
+  - fan.living_room_levoit_core_400s
+```
 
 ## Optional Single-Device Modes
 
@@ -152,6 +188,7 @@ compact: false
 show_cadr: true
 show_filter: true
 show_timer: true
+show_sparklines: true
 pm25_entity: sensor.bedroom_levoit_core_300s_pm25
 aqi_entity: sensor.bedroom_levoit_core_300s_air_quality_index
 cadr_entity: sensor.bedroom_levoit_core_300s_cadr
@@ -172,6 +209,7 @@ Monitor CO, CO₂, VOC/tVOC, particulates, HCHO, Radon, or climate metrics witho
 type: custom:dracula-air-quality-card
 mode: sensor
 name: Office Air Monitor
+show_sparklines: true
 sensors:
   pm25: sensor.office_air_pm25
   pm10: sensor.office_air_pm10
@@ -193,11 +231,15 @@ sensors:
 | `type` | `string` | **Required** | `custom:dracula-air-quality-card` |
 | `devices` | `list` | — | **Standard mode:** List of entity IDs (`"fan.room"`) or device objects (`{ entity, name, room, group, sensors, ... }`) for Whole-Home Overview (alias: `entities`) |
 | `group_by` | `string` | `"type"` | Overview grouping mode: `"type"` (`Air Purifiers` / `Air Quality Sensors`), `"room"` (by each item's `room` / `group` label), or `"none"` (flat list) |
+| `sort_by` | `string` | `"default"` | Overview room sorting: `"default"`, `"pm25"` (worst first), `"filter"` (lowest first), or `"name"` (A–Z) |
 | `entity` | `string` | — | Optional: Primary `fan.*` entity ID for Single Purifier Mode |
 | `sensors` | `object` | — | Optional: Map of sensor entity IDs for Standalone AQ Sensor Mode (see Sensor Map below) |
 | `mode` | `string` | Auto | `"overview"` (standard), `"purifier"`, or `"sensor"` (inferred automatically from `devices`, `entity`, or `sensors`) |
 | `name` | `string` | `"Whole-Home Air Quality"` | Custom card header title |
-| `theme` | `string` | `"dracula"` | `"dracula"` for built-in Dracula styling, or `"auto"` to inherit Home Assistant theme variables |
+| `theme` | `string` | `"dracula"` | `"dracula"` (default), `"dracula-soft"` (low-glare variant), or `"auto"` to inherit Home Assistant theme variables |
+| `language` | `string` | `"auto"` | UI language: `"auto"` (follows `hass.locale`), `"en"`, `"de"`, `"fr"`, or `"es"` |
+| `show_sparklines` | `boolean` | `true` | Show inline 24h SVG trend sparklines for PM2.5 / CO₂ |
+| `thresholds` | `object` | WHO/EPA defaults | Optional custom color breakpoints for `pm25`, `co2`, and `co` (object or array of numbers) |
 | `compact` | `boolean` | `false` | Reduces padding and vertical spacing for dense dashboards |
 | `show_cadr` | `boolean` | `true` | Show CADR readout in Purifier Mode when available |
 | `show_filter` | `boolean` | `true` | Show filter life progress bar when available |
@@ -265,13 +307,13 @@ Used in sensor-only entries inside `devices` and in optional Standalone Air Qual
 
 ## Local Demo
 
-To preview the Whole-Home Overview alongside the optional single-device modes locally without a Home Assistant instance:
+To preview the Whole-Home Overview alongside the optional single-device modes, 24h sparklines, themes, and languages locally without a Home Assistant instance:
 
 ```bash
 python3 -m http.server 8080
 ```
 
-Then open `http://localhost:8080/demo.html` in your browser. All controls (master buttons, filter tabs, collapsible group headers, expandable room rows, power, fan speed, operating mode, auto profile, display, child lock, and timer) are interactive.
+Then open `http://localhost:8080/demo.html` in your browser. All controls (master buttons, filter tabs, sort selector, collapsible group headers, expandable room rows, theme/language switchers, power, fan speed, operating mode, auto profile, display, child lock, and timer) are interactive.
 
 ## License
 
