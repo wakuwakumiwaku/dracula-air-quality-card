@@ -18,6 +18,7 @@ A zero-dependency Home Assistant Lovelace custom card built around a **Whole-Hom
   - Live summary strip showing **Active Purifiers**, **Average PM2.5**, **Worst PM2.5**, **Max CO₂**, and a red **CO Warning** tile if any sensor detects elevated CO (`>= 35 ppm`) or an active CO/gas alarm.
   - One-tap master controls (**All Auto**, **All Sleep**, **All Off**) across all purifiers.
   - Native **`group_by`** sections (`type`, `room`, or `none`) with collapsible group headers (`Air Purifiers · N`, `Air Quality Sensors · N`) and **`All | Purifiers | Sensors`** filter tabs.
+  - **Built-in Purifier Sensors (`include_purifier_sensors: true`)** — Purifiers with onboard air quality sensors automatically appear in the **Air Quality Sensors** group (and `Sensors` tab) with *italic* `belongs to <Purifier>` attribution (localized in EN/DE/FR/ES) and a dedicated sensor-only drawer, without double-counting summary averages.
   - **Smart Sorting (`sort_by`)** — Sort rooms within each group by worst PM2.5 (`pm25`), lowest filter life (`filter`), or alphabetically (`name`), with a live sort selector in the header.
   - Compact expandable room rows that scale cleanly to 10+ rooms with inline purifier controls, 24h trend sparklines, and full sensor drawers.
 - **Contextual Ventilation Advisor (`outdoor_pm25_entity` / `outdoor_aqi_entity`)** — Stays completely hidden when indoor air is clean. When indoor CO₂ (`>= 1000 ppm`), PM2.5 (`> 25 µg/m³`), or VOC rises, displays a compact localized pill advising **Ventilate · Outdoor X µg/m³** (cyan, when outdoor air is clean) or **Keep Closed · Outdoor X µg/m³** (amber, when outdoor air is polluted).
@@ -252,6 +253,7 @@ sensors:
 | `group_by` | `string` | `"type"` | Overview grouping mode: `"type"` (`Air Purifiers` / `Air Quality Sensors`), `"room"` (by each item's `room` / `group` label), or `"none"` (flat list) |
 | `sort_by` | `string` | `"default"` | Overview room sorting: `"default"`, `"pm25"` (worst first), `"filter"` (lowest first), or `"name"` (A–Z) |
 | `default_filter` | `string` | `"all"` | Initial active tab in Overview Mode: `"all"`, `"purifiers"`, or `"sensors"` |
+| `include_purifier_sensors` | `boolean` | `true` | List each purifier's built-in air quality sensor as its own row in the **Air Quality Sensors** group with *italic* `belongs to <Purifier>` attribution (summary averages are never double-counted) |
 | `show_header` | `boolean` | `true` | Show or hide the card header (set `false` to embed cleanly in tabbed dashboards) |
 | `outdoor_pm25_entity` | `string` | — | Outdoor PM2.5 sensor for the contextual Ventilation Advisor pill |
 | `outdoor_aqi_entity` | `string` | — | Optional outdoor AQI sensor fallback for the Ventilation Advisor pill |
