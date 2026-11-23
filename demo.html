@@ -62,7 +62,7 @@
     }
 
     .page-header {
-      max-width: 1280px;
+      max-width: 960px;
       margin: 0 auto 14px;
       display: flex;
       align-items: center;
@@ -166,19 +166,12 @@
       box-shadow: 0 0 8px rgba(80, 250, 123, 0.55);
       flex-shrink: 0;
     }
-    .showcase-grid {
-      max-width: 1280px;
+    .showcase-main {
+      max-width: 960px;
       margin: 0 auto;
-      display: grid;
-      grid-template-columns: minmax(440px, 1.25fr) 352px 352px;
-      gap: 18px;
-      align-items: start;
-    }
-    .col {
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      min-width: 0;
+      gap: 10px;
     }
     .col-label {
       display: flex;
@@ -191,6 +184,7 @@
       text-transform: uppercase;
       letter-spacing: 0.08em;
       color: #6272a4;
+      flex-wrap: wrap;
     }
     .col-label .primary-title {
       color: #f8f8f2;
@@ -209,22 +203,10 @@
       letter-spacing: 0.06em;
     }
     .col-label span.tag {
-      color: #bd93f9;
+      color: #8be9fd;
       font-weight: 600;
       text-transform: none;
       letter-spacing: 0.01em;
-      white-space: nowrap;
-    }
-    .col-label span.tag.muted {
-      color: #8be9fd;
-    }
-    @media (max-width: 1180px) {
-      .showcase-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-      .col.col-overview {
-        grid-column: 1 / -1;
-      }
     }
     @media (max-width: 720px) {
       body {
@@ -241,10 +223,6 @@
       }
       .status-pill {
         max-width: 100%;
-      }
-      .showcase-grid {
-        grid-template-columns: minmax(0, 1fr);
-        gap: 14px;
       }
     }
   </style>
@@ -284,30 +262,12 @@
     </div>
   </header>
 
-  <main class="showcase-grid">
-    <section class="col col-overview">
-      <div class="col-label">
-        <span class="primary-title"><span class="std-badge">STANDARD</span> Whole-Home Overview</span>
-        <span class="tag">5 Purifiers + 3 Sensors</span>
-      </div>
-      <div id="slot-overview"></div>
-    </section>
-
-    <section class="col">
-      <div class="col-label">
-        <span>Optional · Single Purifier</span>
-        <span class="tag muted">Levoit Core 300S</span>
-      </div>
-      <div id="slot-purifier"></div>
-    </section>
-
-    <section class="col">
-      <div class="col-label">
-        <span>Optional · AQ Sensor</span>
-        <span class="tag muted">CO · CO₂ · VOC · PM</span>
-      </div>
-      <div id="slot-sensor"></div>
-    </section>
+  <main class="showcase-main">
+    <div class="col-label">
+      <span class="primary-title"><span class="std-badge">STANDARD</span> Whole-Home Air Quality Overview</span>
+      <span class="tag">Click any purifier or sensor to open its full controls &amp; 24h trend</span>
+    </div>
+    <div id="slot-overview"></div>
   </main>
 
   <script type="module">
@@ -837,11 +797,12 @@
       cardEntries.push({ el, baseConfig });
     }
 
-    /* --- Standard Card: Whole-Home Overview Mode (Grouped by type: 5 Purifiers + 3 AQ Sensors) --- */
+    /* --- Standard Card: Whole-Home Overview Mode (Enlarged centerpiece with modal detail cards) --- */
     mountCard("slot-overview", {
       name: "Whole-Home Air Quality",
       group_by: "type",
       sort_by: "default",
+      detail_view: "modal",
       show_sparklines: true,
       outdoor_pm25_entity: "sensor.outdoor_pm25",
       devices: [
@@ -889,33 +850,6 @@
           },
         },
       ],
-    });
-
-    /* --- Optional Card: Single Purifier Mode --- */
-    mountCard("slot-purifier", {
-      entity: "fan.bedroom_levoit_core_300s",
-      name: "Bedroom Core 300S",
-      show_cadr: true,
-      show_filter: true,
-      show_timer: true,
-      show_sparklines: true,
-    });
-
-    /* --- Optional Card: Standalone AQ Sensor Mode --- */
-    mountCard("slot-sensor", {
-      mode: "sensor",
-      name: "Office Air Monitor",
-      show_sparklines: true,
-      sensors: {
-        pm25: "sensor.office_air_pm25",
-        pm10: "sensor.office_air_pm10",
-        co: "sensor.office_air_co",
-        co2: "sensor.office_air_co2",
-        voc: "sensor.office_air_voc",
-        tvoc: "sensor.office_air_tvoc",
-        temperature: "sensor.office_air_temperature",
-        humidity: "sensor.office_air_humidity",
-      },
     });
 
     /* Theme switcher toolbar */

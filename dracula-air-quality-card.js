@@ -6,7 +6,7 @@
  *   3. Standalone Air Quality Sensor Mode (Optional — PM2.5/10/1, AQI, CO, CO2, VOC/tVOC, NOx/NO2, O3, HCHO, Radon, Temp, Humidity, Pressure)
  */
 
-const CARD_VERSION = "1.6.0";
+const CARD_VERSION = "1.7.0";
 const HISTORY_TTL_MS = 300_000;
 const HISTORY_CACHE = new Map();
 const HISTORY_INFLIGHT = new Set();
@@ -801,6 +801,27 @@ const CARD_CSS = `
     .power-btn.sm { width: 34px; height: 34px; }
     .pill-btn, .filter-tab, .speed-step { min-height: 36px; }
   }
+  .room-row.modal-trigger .chevron { transform: rotate(-90deg); }
+  @keyframes daqFadeIn { from { opacity: 0; } to { opacity: 1; } }
+  .modal-backdrop {
+    position: fixed; inset: 0; z-index: 9999;
+    background: rgba(15, 16, 22, 0.72);
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    display: flex; align-items: center; justify-content: center;
+    padding: 18px; animation: daqFadeIn 0.15s ease;
+  }
+  .modal-dialog {
+    width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto;
+    border-radius: var(--daq-radius); box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+  }
+  .modal-close {
+    width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--daq-border);
+    background: var(--daq-surface); color: var(--daq-subtext);
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 18px; line-height: 1; padding: 0; font-family: inherit;
+    transition: all 0.15s ease;
+  }
+  .modal-close:hover { border-color: var(--daq-purple); color: var(--daq-fg); }
 `;
 
 const EDITOR_CSS = `
@@ -840,6 +861,7 @@ class DraculaAirQualityCard extends HTMLElement {
     this._hass = null;
     this._expanded = new Set();
     this._collapsedGroups = new Set();
+    this._modalKey = null;
     this._filter = "all";
     this._sortBy = null;
     this._confirmReset = null;
@@ -849,6 +871,13 @@ class DraculaAirQualityCard extends HTMLElement {
     this._lastStateCount = -1;
     this._lastRenderSig = null;
     this._watchedIds = [];
+    this._boundEsc = (e) => {
+      if (e.key === "Escape" && this._modalKey) {
+        this._modalKey = null;
+        this._lastRenderSig = null;
+        this._render();
+      }
+    };
 
     // Single delegated listeners attached once
     this.shadowRoot.addEventListener("click", (e) => this._onClick(e));
@@ -886,11 +915,12 @@ class DraculaAirQualityCard extends HTMLElement {
     this._config = {
       theme: "dracula", language: "auto", compact: false,
       show_header: true, show_cadr: true, show_filter: true, show_timer: true, show_sparklines: true,
-      include_purifier_sensors: true,
+      include_purifier_sensors: true, detail_view: "modal",
       group_by: "type", sort_by: "default", default_filter: "all", auto_discover: false,
       ...config,
     };
     this._filter = ["all", "purifiers", "sensors"].includes(this._config.default_filter) ? this._config.default_filter : "all";
+    this._modalKey = null;
     this._sortBy = null;
     this._confirmReset = null;
     if (this._confirmTimer) { clearTimeout(this._confirmTimer); this._confirmTimer = null; }
@@ -951,7 +981,7 @@ class DraculaAirQualityCard extends HTMLElement {
 
   _computeRenderSignature(states) {
     const activeSort = this._sortBy || this._config?.sort_by || "default";
-    let sig = `${this._lang}|${this._filter}|${activeSort}|${this._confirmReset || ""}|${[...this._expanded].join(",")}|${[...this._collapsedGroups].join(",")}`;
+    let sig = `${this._lang}|${this._filter}|${activeSort}|${this._modalKey || ""}|${this._confirmReset || ""}|${[...this._expanded].join(",")}|${[...this._collapsedGroups].join(",")}`;
     for (let i = 0; i < this._watchedIds.length; i++) {
       const id = this._watchedIds[i];
       const st = states[id];
@@ -971,7 +1001,12 @@ class DraculaAirQualityCard extends HTMLElement {
 
   getGridOptions() { return { columns: 12, min_columns: 6, rows: this.getCardSize(), min_rows: 3 }; }
 
+  connectedCallback() {
+    window.addEventListener("keydown", this._boundEsc);
+  }
+
   disconnectedCallback() {
+    window.removeEventListener("keydown", this._boundEsc);
     if (this._confirmTimer) { clearTimeout(this._confirmTimer); this._confirmTimer = null; }
   }
 
@@ -1045,10 +1080,21 @@ class DraculaAirQualityCard extends HTMLElement {
 
     if (action === "more-info") { e.stopPropagation(); return this._fireMoreInfo(target.dataset.entity); }
     if (action === "filter-reset") { e.stopPropagation(); return this._handleFilterReset(target.dataset.entity); }
+    if (action === "close-modal") {
+      if (e.target === target) { this._modalKey = null; this._lastRenderSig = null; this._render(); }
+      return;
+    }
+    if (action === "close-modal-btn") {
+      e.stopPropagation(); this._modalKey = null; this._lastRenderSig = null; return this._render();
+    }
     if (action === "toggle-drawer") {
       const rKey = target.dataset.rowKey ?? (idx !== null ? `d-${idx}` : null);
       if (rKey !== null) {
-        this._expanded.has(rKey) ? this._expanded.delete(rKey) : this._expanded.add(rKey);
+        if ((this._config.detail_view || "modal") === "modal") {
+          this._modalKey = rKey;
+        } else {
+          this._expanded.has(rKey) ? this._expanded.delete(rKey) : this._expanded.add(rKey);
+        }
         this._lastRenderSig = null; return this._render();
       }
     }
@@ -1263,9 +1309,7 @@ class DraculaAirQualityCard extends HTMLElement {
 
   /* ---------- Mode Renderers ---------- */
 
-  _renderPurifierMode() {
-    const dev = resolveDeviceState(this._hass, this._config, this._discoveryCache, this._thresholds);
-    this._watchedIds = dev.watchedIds;
+  _renderPurifierCardBody(dev, idxAttr = "", closeBtn = "") {
     const hero = this._pickHeroMetric(dev);
     const statusParts = dev.isUnavailable
       ? [this._t("unavailable")]
@@ -1278,18 +1322,20 @@ class DraculaAirQualityCard extends HTMLElement {
 
     const extraSensors = {};
     for (const k of SENSOR_KEYS) if (dev.sensors[k] && dev.sensors[k].raw !== null && k !== hero.key) extraSensors[k] = dev.sensors[k];
+    const showHeader = closeBtn ? true : this._config.show_header !== false;
 
     return `
-      <div class="card ${this._config.compact ? "compact" : ""}">
+      <div class="card ${this._config.compact && !closeBtn ? "compact" : ""}">
         ${
-          this._config.show_header !== false
+          showHeader
             ? `<div class="header">
                 <div class="title-wrap"><div class="title">${escapeHtml(dev.name)}</div><div class="subtitle">${escapeHtml(statusParts.join(" · "))}</div></div>
                 <div class="header-actions">
                   ${dev.isUnavailable ? `<span class="offline-badge">${escapeHtml(this._t("offline"))}</span>` : ""}
                   ${this._config.show_filter !== false && dev.filterLow ? `<span class="filter-low-badge" title="Filter replacement needed" data-action="more-info" data-entity="${escapeHtml(dev.filter?.entityId || "")}">${ICONS.filter} ${escapeHtml(this._t("filter_low"))}</span>` : ""}
                   ${dev.error ? `<span class="error-badge" data-action="more-info" data-entity="${escapeHtml(dev.error.entityId)}">${ICONS.alert} ${escapeHtml(dev.error.message)}</span>` : ""}
-                  <button type="button" class="power-btn ${dev.isOn ? "on" : ""}" data-action="power" aria-label="Toggle power">${ICONS.power}</button>
+                  <button type="button" class="power-btn ${dev.isOn ? "on" : ""}" data-action="power" ${idxAttr} aria-label="Toggle power">${ICONS.power}</button>
+                  ${closeBtn}
                 </div>
               </div>`
             : ""
@@ -1305,18 +1351,12 @@ class DraculaAirQualityCard extends HTMLElement {
         </div>
         ${dev.sensors.pm25?.entityId ? this._renderSparkline(dev.sensors.pm25.entityId, "PM2.5", dev.sensors.pm25.unit || "µg/m³", hero.color) : ""}
         ${Object.keys(extraSensors).length ? this._renderMetricTiles(extraSensors) : ""}
-        ${this._renderPurifierControls(dev)}
+        ${this._renderPurifierControls(dev, idxAttr)}
       </div>
     `;
   }
 
-  _renderSensorMode() {
-    const dev = resolveDeviceState(this._hass, this._config, this._discoveryCache, this._thresholds);
-    const watched = new Set(dev.watchedIds);
-    if (this._config.outdoor_pm25_entity) watched.add(this._config.outdoor_pm25_entity);
-    if (this._config.outdoor_aqi_entity) watched.add(this._config.outdoor_aqi_entity);
-    this._watchedIds = Array.from(watched);
-
+  _renderSensorCardBody(dev, closeBtn = "") {
     const hero = this._pickHeroMetric(dev);
     const sensorCount = Object.keys(dev.sensors).length;
     const needsAir = (dev.sensors.co2?.num ?? 0) >= 1000 || (dev.sensors.pm25?.num ?? 0) > 25 || (dev.sensors.voc?.num ?? 0) > 250;
@@ -1325,18 +1365,22 @@ class DraculaAirQualityCard extends HTMLElement {
       : dev.sensors.co2?.entityId
       ? { id: dev.sensors.co2.entityId, label: "CO₂", unit: dev.sensors.co2.unit || "ppm", color: evaluateCO2(dev.sensors.co2.num, this._thresholds, this._lang).color }
       : null;
+    const showHeader = closeBtn ? true : this._config.show_header !== false;
+    const subHtml = dev.isPurifierSensor
+      ? `<em>${escapeHtml(this._t("belongs_to"))} ${escapeHtml(dev.belongsTo)}</em>`
+      : `${sensorCount} ${escapeHtml(this._t("sensors_monitored"))}`;
 
     return `
-      <div class="card ${this._config.compact ? "compact" : ""}">
+      <div class="card ${this._config.compact && !closeBtn ? "compact" : ""}">
         ${
-          this._config.show_header !== false
+          showHeader
             ? `<div class="header">
-                <div class="title-wrap"><div class="title">${escapeHtml(dev.name)}</div><div class="subtitle">${sensorCount} ${escapeHtml(this._t("sensors_monitored"))}</div></div>
-                <div class="header-actions"><div class="health-pill" style="color:${hero.color}"><span class="health-dot" style="background:${hero.color}"></span>${escapeHtml(hero.label)}</div></div>
+                <div class="title-wrap"><div class="title">${escapeHtml(dev.name)}</div><div class="subtitle">${subHtml}</div></div>
+                <div class="header-actions"><div class="health-pill" style="color:${hero.color}"><span class="health-dot" style="background:${hero.color}"></span>${escapeHtml(hero.label)}</div>${closeBtn}</div>
               </div>`
             : ""
         }
-        ${this._renderVentilationPill(needsAir)}
+        ${!closeBtn ? this._renderVentilationPill(needsAir) : ""}
         ${this._renderSafetyBanner(dev)}
         <div class="hero">
           ${this._renderGaugeSVG(hero.valueText, hero.unitText, hero.metricLabel, hero.pct, hero.color, hero.entityId)}
@@ -1349,6 +1393,21 @@ class DraculaAirQualityCard extends HTMLElement {
         ${sensorCount ? this._renderMetricTiles(dev.sensors) : `<div class="empty-state">No air quality sensors configured or available.</div>`}
       </div>
     `;
+  }
+
+  _renderPurifierMode() {
+    const dev = resolveDeviceState(this._hass, this._config, this._discoveryCache, this._thresholds);
+    this._watchedIds = dev.watchedIds;
+    return this._renderPurifierCardBody(dev);
+  }
+
+  _renderSensorMode() {
+    const dev = resolveDeviceState(this._hass, this._config, this._discoveryCache, this._thresholds);
+    const watched = new Set(dev.watchedIds);
+    if (this._config.outdoor_pm25_entity) watched.add(this._config.outdoor_pm25_entity);
+    if (this._config.outdoor_aqi_entity) watched.add(this._config.outdoor_aqi_entity);
+    this._watchedIds = Array.from(watched);
+    return this._renderSensorCardBody(dev);
   }
 
   _renderOverviewMode() {
@@ -1473,6 +1532,22 @@ class DraculaAirQualityCard extends HTMLElement {
         </div>
         ${rowsHtml}
       </div>
+      ${this._renderDetailModal(displayEntries)}
+    `;
+  }
+
+  _renderDetailModal(displayEntries) {
+    if ((this._config.detail_view || "modal") !== "modal" || !this._modalKey) return "";
+    const entry = displayEntries.find((e) => e.rowKey === this._modalKey);
+    if (!entry) return "";
+    const closeBtn = `<button type="button" class="modal-close" data-action="close-modal-btn" aria-label="Close">×</button>`;
+    const cardHtml = entry.dev.isPurifier
+      ? this._renderPurifierCardBody(entry.dev, `data-idx="${entry.idx}"`, closeBtn)
+      : this._renderSensorCardBody(entry.dev, closeBtn);
+    return `
+      <div class="modal-backdrop" data-action="close-modal" role="dialog" aria-modal="true">
+        <div class="modal-dialog">${cardHtml}</div>
+      </div>
     `;
   }
 
@@ -1553,10 +1628,11 @@ class DraculaAirQualityCard extends HTMLElement {
       badgesHtml = pills.length ? pills.join("") : `<span class="offline-badge">${escapeHtml(this._t("standby"))}</span>`;
     }
 
+    const isModalMode = (this._config.detail_view || "modal") === "modal";
     const idxAttr = `data-idx="${idx}"`;
     return `
-      <div class="room-item ${isExpanded ? "expanded" : ""}">
-        <div class="room-row" role="button" tabindex="0" aria-expanded="${isExpanded}" data-action="toggle-drawer" data-row-key="${escapeHtml(rowKey)}" ${idxAttr}>
+      <div class="room-item ${!isModalMode && isExpanded ? "expanded" : ""}">
+        <div class="room-row ${isModalMode ? "modal-trigger" : ""}" role="button" tabindex="0" aria-expanded="${!isModalMode && isExpanded}" data-action="toggle-drawer" data-row-key="${escapeHtml(rowKey)}" ${idxAttr}>
           <div class="room-left">
             <span class="status-dot" style="background:${dotColor}"></span>
             <div class="room-meta"><span class="room-name">${escapeHtml(dev.name)}</span><span class="room-sub">${subHtml}</span></div>
@@ -1568,7 +1644,7 @@ class DraculaAirQualityCard extends HTMLElement {
           </div>
         </div>
         ${
-          isExpanded
+          !isModalMode && isExpanded
             ? `<div class="room-drawer">
                 ${this._renderSafetyBanner(dev)}
                 ${dev.isPurifier ? this._renderFilterBlock(dev) : ""}
@@ -1667,7 +1743,7 @@ class DraculaAirQualityCardEditor extends HTMLElement {
       if (el.id === "auto_discover") this._render();
       return;
     }
-    const strKeys = ["theme", "language", "group_by", "sort_by", "default_filter", "entity", "outdoor_pm25_entity"];
+    const strKeys = ["theme", "language", "group_by", "sort_by", "default_filter", "detail_view", "entity", "outdoor_pm25_entity"];
     if (strKeys.includes(el.id) || el.id === "name") {
       const next = { ...this._config };
       if (el.value) next[el.id] = el.value; else delete next[el.id];
@@ -1729,9 +1805,10 @@ class DraculaAirQualityCardEditor extends HTMLElement {
               <div class="field"><label>Sort Devices By</label><select id="sort_by"><option value="default" ${(this._config.sort_by || "default") === "default" ? "selected" : ""}>Default Order</option><option value="pm25" ${this._config.sort_by === "pm25" ? "selected" : ""}>Worst PM2.5</option><option value="filter" ${this._config.sort_by === "filter" ? "selected" : ""}>Lowest Filter</option><option value="name" ${this._config.sort_by === "name" ? "selected" : ""}>Name (A–Z)</option></select></div>
             </div>
             <div class="row">
+              <div class="field"><label>Detail View on Click</label><select id="detail_view"><option value="modal" ${(this._config.detail_view || "modal") === "modal" ? "selected" : ""}>Modal Overlay (Default)</option><option value="inline" ${this._config.detail_view === "inline" ? "selected" : ""}>Inline Drawer</option></select></div>
               <div class="field"><label>Default Filter Tab</label><select id="default_filter"><option value="all" ${(this._config.default_filter || "all") === "all" ? "selected" : ""}>All</option><option value="purifiers" ${this._config.default_filter === "purifiers" ? "selected" : ""}>Purifiers</option><option value="sensors" ${this._config.default_filter === "sensors" ? "selected" : ""}>Sensors</option></select></div>
-              <div class="field"><label>Outdoor PM2.5 Sensor (optional)</label><input type="text" id="outdoor_pm25_entity" list="sensor-list-ov" value="${escapeHtml(this._config.outdoor_pm25_entity || "")}" placeholder="sensor.outdoor_pm25" /><datalist id="sensor-list-ov">${sens.map((id) => `<option value="${escapeHtml(id)}">`).join("")}</datalist></div>
             </div>
+            <div class="field"><label>Outdoor PM2.5 Sensor (optional)</label><input type="text" id="outdoor_pm25_entity" list="sensor-list-ov" value="${escapeHtml(this._config.outdoor_pm25_entity || "")}" placeholder="sensor.outdoor_pm25" /><datalist id="sensor-list-ov">${sens.map((id) => `<option value="${escapeHtml(id)}">`).join("")}</datalist></div>
             ${
               this._config.auto_discover
                 ? `<div style="font-size:12px;opacity:.8">Auto-discovery enabled — all Home Assistant purifiers & AQ sensors are included automatically.</div>`
