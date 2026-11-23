@@ -6,7 +6,7 @@
  *   3. Standalone Air Quality Sensor Mode (Optional — PM2.5/10/1, AQI, CO, CO2, VOC/tVOC, NOx/NO2, O3, HCHO, Radon, Temp, Humidity, Pressure)
  */
 
-const CARD_VERSION = "1.5.0";
+const CARD_VERSION = "1.6.0";
 const HISTORY_TTL_MS = 300_000;
 const HISTORY_CACHE = new Map();
 const HISTORY_INFLIGHT = new Set();
@@ -744,9 +744,12 @@ const CARD_CSS = `
   .room-meta { min-width: 0; display: flex; flex-direction: column; }
   .room-name { font-size: 13.5px; font-weight: 700; color: var(--daq-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .room-sub { font-size: 11px; color: var(--daq-subtext); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .room-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
-  .mini-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; background: var(--daq-bg); border: 1px solid var(--daq-border); color: var(--daq-fg); }
-  .mini-badge .dot { width: 6px; height: 6px; border-radius: 50%; }
+  .room-right { display: flex; align-items: center; gap: 5px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+  .mini-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; background: var(--daq-bg); border: 1px solid var(--daq-border); color: var(--daq-fg); white-space: nowrap; }
+  .mini-badge .k { color: var(--daq-subtext); font-weight: 600; font-size: 10px; }
+  .mini-badge .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .mini-badge.cadr-active { border-color: rgba(139, 233, 253, 0.45); background: rgba(139, 233, 253, 0.12); color: var(--daq-cyan); }
+  .mini-badge.cadr-idle { color: var(--daq-muted); border-color: var(--daq-border); }
   .mini-badge.alert { border-color: rgba(255, 85, 85, 0.65); background: rgba(255, 85, 85, 0.18); color: #ff6e6e; }
   .chevron { width: 16px; height: 16px; color: var(--daq-muted); transition: transform 0.2s ease; display: inline-flex; align-items: center; justify-content: center; }
   .room-item.expanded .chevron { transform: rotate(180deg); color: var(--daq-purple); }
@@ -781,8 +784,9 @@ const CARD_CSS = `
     .hero { gap: 12px; }
     .gauge-wrap { width: 92px; height: 92px; }
     .gauge-value { font-size: 21px; }
-    .room-row { padding: 10px 9px; gap: 6px; min-height: 44px; }
-    .room-right { gap: 4px; }
+    .room-row { padding: 10px 9px; gap: 6px; min-height: 44px; flex-wrap: wrap; }
+    .room-left { min-width: 120px; }
+    .room-right { gap: 4px; max-width: 100%; }
     .mini-badge { padding: 3px 6px; font-size: 10.5px; }
     .power-btn.sm { width: 34px; height: 34px; }
     .pill-btn, .filter-tab, .speed-step { min-height: 36px; }
@@ -1479,7 +1483,6 @@ class DraculaAirQualityCard extends HTMLElement {
     const co2Eval = co2?.num !== null && co2?.num !== undefined ? evaluateCO2(co2.num, this._thresholds, this._lang) : null;
     const coEval = co?.num !== null && co?.num !== undefined ? evaluateCO(co.num, this._thresholds, this._lang) : null;
     const aqiEval = aqi && !isUnavailable(aqi.raw) ? evaluateAQI(aqi.raw, this._lang) : null;
-    const hasLiveReading = Boolean(pmEval || co2Eval || coEval || aqiEval || dev.coAlarm);
 
     const dotColor = dev.coDanger
       ? "var(--daq-red)"
@@ -1487,17 +1490,68 @@ class DraculaAirQualityCard extends HTMLElement {
       ? (dev.isOn ? "var(--daq-green)" : "var(--daq-muted)")
       : pmEval?.color || co2Eval?.color || coEval?.color || aqiEval?.color || (dev.isPurifierSensor ? "var(--daq-muted)" : "var(--daq-cyan)");
 
+    // Build purifier speed/mode subtitle (e.g. "Auto · Speed 2 (67%) · Filter 92%")
+    let purifierSub = this._t("off");
+    if (dev.isPurifier) {
+      const filterStr = dev.filter?.num !== null && dev.filter?.num !== undefined ? `Filter ${Math.round(dev.filter.num)}%` : null;
+      if (dev.isOn) {
+        let speedStr = null;
+        if (dev.percentage !== null) {
+          const step = dev.percentageStep || 25;
+          const lvl = Math.max(1, Math.round(dev.percentage / step));
+          speedStr = `Speed ${lvl} (${Math.round(dev.percentage)}%)`;
+        }
+        purifierSub = [dev.currentMode ? titleCase(dev.currentMode) : "On", speedStr, filterStr].filter(Boolean).join(" · ");
+      } else {
+        purifierSub = [this._t("off"), filterStr].filter(Boolean).join(" · ");
+      }
+    }
+
     const subHtml = dev.isPurifierSensor
       ? `<em>${escapeHtml(this._t("belongs_to"))} ${escapeHtml(dev.belongsTo)}</em>`
       : escapeHtml(
           dev.isUnavailable
             ? this._t("offline")
             : dev.isPurifier
-            ? dev.isOn
-              ? [dev.currentMode ? titleCase(dev.currentMode) : "On", dev.percentage !== null ? `${Math.round(dev.percentage)}%` : null, dev.filter?.num !== null && dev.filter?.num !== undefined ? `Filter ${Math.round(dev.filter.num)}%` : null].filter(Boolean).join(" · ")
-              : this._t("off")
+            ? purifierSub
             : dev.coAlarm ? `${dev.coAlarm.type} Active` : this._t("air_quality_monitor")
         );
+
+    // Build right-side badges cleanly separated by row type
+    let badgesHtml = "";
+    if (dev.isPurifier) {
+      if (dev.isUnavailable) badgesHtml += `<span class="offline-badge">${escapeHtml(this._t("offline"))}</span>`;
+      if (dev.filterLow) badgesHtml += `<span class="filter-low-badge" title="Filter replacement needed">${ICONS.filter} Low</span>`;
+      if (this._config.show_cadr !== false && dev.cadr && dev.cadr.num !== null) {
+        const cadrActive = dev.isOn && dev.cadr.num > 0;
+        badgesHtml += `<span class="mini-badge ${cadrActive ? "cadr-active" : "cadr-idle"}" title="CADR"><span class="dot" style="background:${cadrActive ? "var(--daq-cyan)" : "var(--daq-muted)"}"></span>${formatNum(dev.cadr.num, 0)} ${escapeHtml(dev.cadr.unit)}</span>`;
+      }
+      // Only show PM2.5 pill on purifier rows when purifier sensors are NOT split out into the Air Quality Sensors group
+      if (this._config.include_purifier_sensors === false && pmEval) {
+        badgesHtml += `<span class="mini-badge" title="PM2.5"><span class="dot" style="background:${pmEval.color}"></span>${formatNum(pm.num, 0)} µg/m³</span>`;
+      }
+    } else {
+      // Sensor row: show up to 3 compact live value pills with labels & units
+      const sensorOrder = ["pm25", "aqi", "co2", "co", "voc", "tvoc", "pm10", "hcho", "radon", "no2", "o3", "temperature", "humidity"];
+      const pills = [];
+      if (dev.coAlarm && !coEval) {
+        pills.push(`<span class="mini-badge alert" title="CO Alarm"><span class="dot" style="background:var(--daq-red)"></span>CO ALARM</span>`);
+      }
+      for (const key of sensorOrder) {
+        if (pills.length >= 3) break;
+        const s = dev.sensors[key];
+        if (!s || isUnavailable(s.raw)) continue;
+        const meta = SENSOR_META[key];
+        const color = evaluateMetricColor(key, s.num ?? s.raw, s.unit, this._thresholds);
+        const valText = s.num !== null ? formatNum(s.num, meta.decimals) : titleCase(s.raw);
+        const isAlert = key === "co" && dev.coDanger;
+        const showLabel = key !== "temperature" && key !== "humidity";
+        pills.push(
+          `<span class="mini-badge ${isAlert ? "alert" : ""}" title="${escapeHtml(meta.label)}"><span class="dot" style="background:${isAlert ? "var(--daq-red)" : color}"></span>${showLabel ? `<span class="k">${escapeHtml(meta.label)}</span> ` : ""}${escapeHtml(valText)}${s.unit ? ` ${escapeHtml(s.unit)}` : ""}</span>`
+        );
+      }
+      badgesHtml = pills.length ? pills.join("") : `<span class="offline-badge">${escapeHtml(this._t("standby"))}</span>`;
+    }
 
     const idxAttr = `data-idx="${idx}"`;
     return `
@@ -1508,13 +1562,7 @@ class DraculaAirQualityCard extends HTMLElement {
             <div class="room-meta"><span class="room-name">${escapeHtml(dev.name)}</span><span class="room-sub">${subHtml}</span></div>
           </div>
           <div class="room-right">
-            ${dev.isUnavailable ? `<span class="offline-badge">${escapeHtml(this._t("offline"))}</span>` : ""}
-            ${dev.isPurifier && dev.filterLow ? `<span class="filter-low-badge" title="Filter replacement needed">${ICONS.filter} Low</span>` : ""}
-            ${pmEval ? `<span class="mini-badge" title="PM2.5"><span class="dot" style="background:${pmEval.color}"></span>${formatNum(pm.num, 0)} µg/m³</span>` : ""}
-            ${!pmEval && aqiEval ? `<span class="mini-badge" title="AQI"><span class="dot" style="background:${aqiEval.color}"></span>AQI ${aqi.num !== null ? formatNum(aqi.num, 0) : escapeHtml(titleCase(aqi.raw))}</span>` : ""}
-            ${co2Eval ? `<span class="mini-badge" title="CO₂"><span class="dot" style="background:${co2Eval.color}"></span>${formatNum(co2.num, 0)} ppm</span>` : ""}
-            ${coEval || dev.coAlarm ? `<span class="mini-badge ${dev.coDanger ? "alert" : ""}" title="CO"><span class="dot" style="background:${dev.coDanger ? "var(--daq-red)" : coEval.color}"></span>${coEval ? `${formatNum(co.num, 0)} ppm CO` : "CO ALARM"}</span>` : ""}
-            ${dev.isPurifierSensor && !hasLiveReading ? `<span class="offline-badge">${escapeHtml(this._t("standby"))}</span>` : ""}
+            ${badgesHtml}
             ${dev.isPurifier ? `<button type="button" class="power-btn sm ${dev.isOn ? "on" : ""}" data-action="power" ${idxAttr} aria-label="Toggle ${escapeHtml(dev.name)}">${ICONS.power}</button>` : ""}
             <span class="chevron">${ICONS.chevron}</span>
           </div>
