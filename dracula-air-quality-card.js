@@ -1,12 +1,12 @@
 /**
  * Dracula Air Quality Card for Home Assistant Lovelace
  * Zero-dependency ES module supporting:
- *   1. Purifier Mode (auto-discovers Levoit ESPHome/VeSync, Xiaomi MIoT, Philips CoAP, IKEA Starkvind, generic HA fans)
- *   2. Standalone Air Quality Sensor Mode (PM2.5, PM10, PM1, AQI, CO2, VOC, NOx, Temp, Humidity, Pressure)
- *   3. Whole-Home Overview Mode (mixed purifiers + standalone sensors, summary strip, master controls, expandable drawers)
+ *   1. Whole-Home Air Quality Overview (Standard — grouped purifiers + standalone AQ sensors, summary strip, master controls, expandable drawers)
+ *   2. Single Purifier Mode (Optional — auto-discovers Levoit ESPHome/VeSync, Xiaomi MIoT, Philips CoAP, IKEA Starkvind, generic HA fans)
+ *   3. Standalone Air Quality Sensor Mode (Optional — PM2.5, PM10, PM1, AQI, CO, CO2, VOC/tVOC, NOx, NO2, O3, HCHO, Radon, Temp, Humidity, Pressure)
  */
 
-const CARD_VERSION = "1.0.0";
+const CARD_VERSION = "1.1.0";
 
 const SENSOR_KEYS = [
   "pm25",
@@ -1558,11 +1558,60 @@ class DraculaAirQualityCard extends HTMLElement {
 
   static getStubConfig(hass) {
     const states = hass?.states || {};
-    const firstFan = Object.keys(states).find((id) => id.startsWith("fan."));
-    if (firstFan) {
-      return { entity: firstFan, theme: "dracula" };
+    const devices = [];
+    const fans = Object.keys(states).filter((id) => id.startsWith("fan.")).slice(0, 6);
+    const fanPrefixes = fans.flatMap((id) => getFanPrefixes(id));
+
+    for (const fanId of fans) {
+      devices.push(fanId);
     }
-    return { entity: "fan.air_purifier", theme: "dracula" };
+
+    // Also include standalone AQ sensors (not siblings of already-added fans)
+    const aqClasses = new Set([
+      "pm25",
+      "carbon_dioxide",
+      "carbon_monoxide",
+      "volatile_organic_compounds",
+      "volatile_organic_compounds_parts",
+    ]);
+    const sensorGroups = new Map();
+    for (const [eid, st] of Object.entries(states)) {
+      if (!eid.startsWith("sensor.")) continue;
+      const dc = st?.attributes?.device_class;
+      if (!dc || !aqClasses.has(dc)) continue;
+      const slug = eid.split(".")[1] || "";
+      if (fanPrefixes.some((p) => slug === p || slug.startsWith(`${p}_`))) continue;
+      const prefix = slug.replace(/_(pm25|pm2_5|pm_2_5|co2|carbon_dioxide|co|carbon_monoxide|voc|tvoc|voc_index)$/, "");
+      const mapped = DEVICE_CLASS_TO_SENSOR[dc];
+      if (!mapped) continue;
+      if (!sensorGroups.has(prefix)) {
+        sensorGroups.set(prefix, { name: titleCase(prefix || "Air Monitor"), sensors: {} });
+      }
+      sensorGroups.get(prefix).sensors[mapped] = eid;
+    }
+    for (const entry of Array.from(sensorGroups.values()).slice(0, 4)) {
+      devices.push(entry);
+    }
+
+    if (!devices.length) {
+      devices.push(
+        { entity: "fan.living_room_air_purifier", name: "Living Room" },
+        {
+          name: "Office Air Monitor",
+          sensors: {
+            pm25: "sensor.office_pm25",
+            co2: "sensor.office_co2",
+          },
+        }
+      );
+    }
+
+    return {
+      name: "Whole-Home Air Quality",
+      theme: "dracula",
+      group_by: "type",
+      devices,
+    };
   }
 
   setConfig(config) {
@@ -2661,7 +2710,10 @@ class DraculaAirQualityCardEditor extends HTMLElement {
     if (this._config.mode === "sensor" || (!this._config.entity && this._config.sensors)) {
       return "sensor";
     }
-    return "purifier";
+    if (this._config.mode === "purifier" || this._config.entity) {
+      return "purifier";
+    }
+    return "overview";
   }
 
   _render() {
@@ -2677,11 +2729,11 @@ class DraculaAirQualityCardEditor extends HTMLElement {
       <div class="editor">
         <div class="row">
           <div class="field">
-            <label>Card Mode</label>
+            <label>Layout Mode</label>
             <select id="mode">
-              <option value="purifier" ${mode === "purifier" ? "selected" : ""}>Purifier</option>
-              <option value="sensor" ${mode === "sensor" ? "selected" : ""}>Air Quality Sensor</option>
-              <option value="overview" ${mode === "overview" ? "selected" : ""}>Whole-Home Overview</option>
+              <option value="overview" ${mode === "overview" ? "selected" : ""}>Whole-Home Overview (Standard)</option>
+              <option value="purifier" ${mode === "purifier" ? "selected" : ""}>Single Purifier (Optional)</option>
+              <option value="sensor" ${mode === "sensor" ? "selected" : ""}>Standalone AQ Sensor (Optional)</option>
             </select>
           </div>
           <div class="field">
@@ -2896,7 +2948,7 @@ if (!window.customCards.some((c) => c.type === "dracula-air-quality-card")) {
     type: "dracula-air-quality-card",
     name: "Dracula Air Quality Card",
     description:
-      "Dracula-themed Lovelace card for air purifiers, standalone air quality monitors, and whole-home air quality overviews.",
+      "Whole-Home Air Quality Overview card for Home Assistant (grouped purifiers & CO/CO₂/VOC/PM sensors) with optional single-device purifier and sensor modes.",
     preview: true,
   });
 }

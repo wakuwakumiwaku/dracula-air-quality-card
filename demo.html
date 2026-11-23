@@ -98,7 +98,7 @@
       max-width: 1280px;
       margin: 0 auto;
       display: grid;
-      grid-template-columns: 350px 350px minmax(430px, 1fr);
+      grid-template-columns: minmax(440px, 1.25fr) 352px 352px;
       gap: 18px;
       align-items: start;
     }
@@ -120,12 +120,31 @@
       letter-spacing: 0.08em;
       color: #6272a4;
     }
+    .col-label .primary-title {
+      color: #f8f8f2;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .col-label .std-badge {
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: rgba(189, 147, 249, 0.2);
+      border: 1px solid rgba(189, 147, 249, 0.5);
+      color: #bd93f9;
+      font-size: 9.5px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+    }
     .col-label span.tag {
       color: #bd93f9;
       font-weight: 600;
       text-transform: none;
       letter-spacing: 0.01em;
       white-space: nowrap;
+    }
+    .col-label span.tag.muted {
+      color: #8be9fd;
     }
     @media (max-width: 1180px) {
       .showcase-grid {
@@ -167,7 +186,7 @@
       </div>
       <div class="brand-text">
         <h1>Dracula Air Quality Card</h1>
-        <p>Interactive Showcase · Purifier, CO/CO₂/VOC Sensor &amp; Grouped Whole-Home Overview</p>
+        <p>Whole-Home Air Quality Overview (Standard) · Plus Optional Single Purifier &amp; AQ Sensor Views</p>
       </div>
     </div>
     <div class="status-pill" id="activity-log">
@@ -177,28 +196,28 @@
   </header>
 
   <main class="showcase-grid">
+    <section class="col col-overview">
+      <div class="col-label">
+        <span class="primary-title"><span class="std-badge">STANDARD</span> Whole-Home Overview</span>
+        <span class="tag">5 Purifiers + 3 Sensors</span>
+      </div>
+      <div id="slot-overview"></div>
+    </section>
+
     <section class="col">
       <div class="col-label">
-        <span>1 · Purifier Mode</span>
-        <span class="tag">Levoit Core 300S</span>
+        <span>Optional · Single Purifier</span>
+        <span class="tag muted">Levoit Core 300S</span>
       </div>
       <div id="slot-purifier"></div>
     </section>
 
     <section class="col">
       <div class="col-label">
-        <span>2 · AQ Sensor Mode</span>
-        <span class="tag">CO · CO₂ · VOC · PM</span>
+        <span>Optional · AQ Sensor</span>
+        <span class="tag muted">CO · CO₂ · VOC · PM</span>
       </div>
       <div id="slot-sensor"></div>
-    </section>
-
-    <section class="col col-overview">
-      <div class="col-label">
-        <span>3 · Whole-Home Overview</span>
-        <span class="tag">Grouped · 5 Purifiers + 3 Sensors</span>
-      </div>
-      <div id="slot-overview"></div>
     </section>
   </main>
 

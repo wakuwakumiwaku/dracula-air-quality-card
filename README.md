@@ -4,22 +4,26 @@
 [![Validate with HACS](https://img.shields.io/github/actions/workflow/status/wakuwakumiwaku/dracula-air-quality-card/validate.yml?branch=main&label=HACS%20Validate&style=for-the-badge)](https://github.com/wakuwakumiwaku/dracula-air-quality-card/actions/workflows/validate.yml)
 [![MIT License](https://img.shields.io/github/license/wakuwakumiwaku/dracula-air-quality-card?style=for-the-badge&color=bd93f9)](./LICENSE)
 
-A zero-dependency Home Assistant Lovelace custom card for air purifiers, standalone air quality & gas monitors, and whole-home air quality dashboards, styled with the [Dracula](https://draculatheme.com/) palette.
+A zero-dependency Home Assistant Lovelace custom card built around a **Whole-Home Air Quality Overview** for grouped air purifiers and CO/CO₂/VOC/PM sensors — with optional focused modes for a single purifier or standalone air quality monitor — styled with the [Dracula](https://draculatheme.com/) palette.
 
 ![Dracula Air Quality Card Preview](./preview.png)
 
 ## Features
 
-- **Three display modes** in one card:
-  - **Purifier Mode** — Hero PM2.5 gauge ring, health status pill, fan speed & operating mode controls, auto profile selector, CADR readout, filter life bar with low-filter warning, display & child lock toggles, and sleep timer.
-  - **Standalone Air Quality Sensor Mode** — Hero PM2.5 / CO₂ / AQI gauge ring with responsive, clickable metric tiles for **PM2.5, PM10, PM1.0, AQI, CO, CO₂, VOC, tVOC, NOₓ, NO₂, O₃, HCHO (Formaldehyde), Radon, Temperature, Humidity, and Pressure**, plus red safety banners for elevated CO (`>= 35 ppm`) or active `co_alarm` / `gas_alarm` sensors.
-  - **Whole-Home Overview Mode** — Summary strip (active purifiers, average PM2.5, worst PM2.5, max CO₂, and CO warning when triggered), master controls (**All Auto**, **All Sleep**, **All Off**), **`All | Purifiers | Sensors`** filter tabs, native **`group_by`** sections with collapsible headers, and compact expandable room rows that scale cleanly to 10+ devices.
-- **Smart Auto-Discovery** — Point the card at a `fan.*` entity to discover sibling sensors and controls by entity naming conventions **and** Home Assistant `device_class` (`carbon_monoxide`, `carbon_dioxide`, `volatile_organic_compounds`, `volatile_organic_compounds_parts`, `nitrogen_dioxide`, `ozone`, etc.), with attribute fallbacks and explicit per-entity overrides.
+- **Whole-Home Air Quality Overview (Standard Default)** — Monitor and control every purifier and air quality sensor in your home from one card:
+  - Live summary strip showing **Active Purifiers**, **Average PM2.5**, **Worst PM2.5**, **Max CO₂**, and a red **CO Warning** tile if any sensor detects elevated CO (`>= 35 ppm`) or an active CO/gas alarm.
+  - One-tap master controls (**All Auto**, **All Sleep**, **All Off**) across all purifiers.
+  - Native **`group_by`** sections (`type`, `room`, or `none`) with collapsible group headers (`Air Purifiers · N`, `Air Quality Sensors · N`) and **`All | Purifiers | Sensors`** filter tabs.
+  - Compact expandable room rows that scale cleanly to 10+ rooms with inline purifier controls and full sensor drawers.
+- **Optional Single-Device Modes** — When you want a dedicated card for one device:
+  - **Single Purifier Mode (Optional)** — Hero PM2.5 gauge ring, health status pill, fan speed & operating mode controls, auto profile selector, CADR readout, filter life bar with low-filter warning, display & child lock toggles, and sleep timer.
+  - **Standalone Air Quality Sensor Mode (Optional)** — Hero PM2.5 / CO₂ / AQI gauge ring with clickable metric tiles for **PM2.5, PM10, PM1.0, AQI, CO, CO₂, VOC, tVOC, NOₓ, NO₂, O₃, HCHO (Formaldehyde), Radon, Temperature, Humidity, and Pressure**, plus prominent red safety banners for elevated CO or active `co_alarm` / `gas_alarm` sensors.
+- **Smart Auto-Discovery** — Point any purifier entry at a `fan.*` entity to discover sibling sensors and controls automatically by entity naming conventions **and** Home Assistant `device_class` (`carbon_monoxide`, `carbon_dioxide`, `volatile_organic_compounds`, `volatile_organic_compounds_parts`, `nitrogen_dioxide`, `ozone`, etc.), with attribute fallbacks and per-entity overrides.
 - **Health & Safety Thresholds** — Color-coded severity bands for PM2.5 (WHO/EPA), CO (`<= 9`, `<= 35`, `<= 70`, `> 70` ppm), CO₂ (`<= 800`, `<= 1200`, `<= 1800`, `> 1800` ppm), unit-aware VOC/tVOC (VOC Index, `ppb`, `µg/m³`), HCHO, Radon (`Bq/m³` / `pCi/L`), NO₂, and O₃.
 - **Fast & Responsive** — Lightweight state fingerprinting skips redundant Shadow DOM re-renders on unrelated Home Assistant ticks, while CSS `@container` queries keep layouts crisp from narrow 360px mobile screens to wide desktop dashboards.
 - **Interactive History Graphs** — Click any gauge or metric tile to open Home Assistant's native `more-info` history dialog.
 - **Dracula & Theme-Aware Styling** — Ships with the Dracula dark palette by default (`theme: "dracula"`), or set `theme: "auto"` to inherit your active Home Assistant light/dark theme variables.
-- **Visual Editor Included** — Full Lovelace UI configuration editor (`dracula-air-quality-card-editor`) with zero external dependencies.
+- **Visual Editor Included** — Full Lovelace UI configuration editor (`dracula-air-quality-card-editor`) defaulting to Whole-Home Overview, with zero external dependencies.
 
 ## Supported Purifiers & Air Quality Sensors
 
@@ -62,64 +66,11 @@ Works out of the box with:
    - **Resource type:** `JavaScript Module`
 4. Refresh your browser.
 
-## Configuration Examples
+## Quick Start: Whole-Home Air Quality Overview (Standard)
 
-### 1. Purifier Mode
+Adding the card through the Home Assistant UI automatically opens in **Whole-Home Overview** mode and pre-populates your discovered purifiers and air quality sensors.
 
-Minimal configuration using automatic sibling entity discovery:
-
-```yaml
-type: custom:dracula-air-quality-card
-entity: fan.bedroom_levoit_core_300s
-name: Bedroom Purifier
-```
-
-With explicit entity overrides and display options:
-
-```yaml
-type: custom:dracula-air-quality-card
-entity: fan.bedroom_levoit_core_300s
-name: Bedroom Core 300S
-theme: dracula
-compact: false
-show_cadr: true
-show_filter: true
-show_timer: true
-pm25_entity: sensor.bedroom_levoit_core_300s_pm25
-aqi_entity: sensor.bedroom_levoit_core_300s_air_quality_index
-cadr_entity: sensor.bedroom_levoit_core_300s_cadr
-filter_entity: sensor.bedroom_levoit_core_300s_filter_life_left
-display_entity: switch.bedroom_levoit_core_300s_display
-child_lock_entity: switch.bedroom_levoit_core_300s_display_lock
-operating_mode_entity: select.bedroom_levoit_core_300s_fan_mode
-auto_mode_entity: select.bedroom_levoit_core_300s_auto_mode
-timer_entity: number.bedroom_levoit_core_300s_timer
-timer_remaining_entity: sensor.bedroom_levoit_core_300s_timer_remaining
-```
-
-### 2. Standalone Air Quality Sensor Mode
-
-Monitor CO, CO₂, VOC/tVOC, particulates, HCHO, Radon, or climate metrics without a purifier fan entity:
-
-```yaml
-type: custom:dracula-air-quality-card
-mode: sensor
-name: Office Air Monitor
-sensors:
-  pm25: sensor.office_air_pm25
-  pm10: sensor.office_air_pm10
-  co: sensor.office_air_co
-  co2: sensor.office_air_co2
-  voc: sensor.office_air_voc
-  tvoc: sensor.office_air_tvoc
-  temperature: sensor.office_air_temperature
-  humidity: sensor.office_air_humidity
-  co_alarm: binary_sensor.office_co_alarm
-```
-
-### 3. Whole-Home Overview Mode (with Grouping & Filter Tabs)
-
-Group purifiers and air quality sensors cleanly using `group_by: type` (default), `group_by: room`, or `group_by: none`. When both purifiers and standalone sensors are present, `All | Purifiers | Sensors` filter tabs appear automatically and group headers can be clicked to collapse or expand each section:
+Here is a complete YAML example combining 5 air purifiers and 3 standalone air quality / CO monitors with `group_by: type` (default):
 
 ```yaml
 type: custom:dracula-air-quality-card
@@ -172,7 +123,66 @@ devices:
       humidity: sensor.garage_humidity
 ```
 
-To group by floor or area instead, change `group_by: room` (each entry uses its `room` or `group` property, falling back to `"Other"`). Set `group_by: none` for a flat list.
+- **Group by type (`group_by: type`, default):** Separates devices into collapsible **Air Purifiers** and **Air Quality Sensors** sections and displays `All | Purifiers | Sensors` filter tabs.
+- **Group by room (`group_by: room`):** Groups entries by each item's `room` (or `group`) label, falling back to `"Other"`.
+- **Flat list (`group_by: none`):** Shows all devices in a single list without section headers.
+
+## Optional Single-Device Modes
+
+If you also want a focused room card for a single purifier or standalone sensor, the same card supports both optional modes.
+
+### Single Purifier Mode (Optional)
+
+Minimal configuration using automatic sibling entity discovery:
+
+```yaml
+type: custom:dracula-air-quality-card
+entity: fan.bedroom_levoit_core_300s
+name: Bedroom Purifier
+```
+
+With explicit entity overrides and display options:
+
+```yaml
+type: custom:dracula-air-quality-card
+entity: fan.bedroom_levoit_core_300s
+name: Bedroom Core 300S
+theme: dracula
+compact: false
+show_cadr: true
+show_filter: true
+show_timer: true
+pm25_entity: sensor.bedroom_levoit_core_300s_pm25
+aqi_entity: sensor.bedroom_levoit_core_300s_air_quality_index
+cadr_entity: sensor.bedroom_levoit_core_300s_cadr
+filter_entity: sensor.bedroom_levoit_core_300s_filter_life_left
+display_entity: switch.bedroom_levoit_core_300s_display
+child_lock_entity: switch.bedroom_levoit_core_300s_display_lock
+operating_mode_entity: select.bedroom_levoit_core_300s_fan_mode
+auto_mode_entity: select.bedroom_levoit_core_300s_auto_mode
+timer_entity: number.bedroom_levoit_core_300s_timer
+timer_remaining_entity: sensor.bedroom_levoit_core_300s_timer_remaining
+```
+
+### Standalone Air Quality Sensor Mode (Optional)
+
+Monitor CO, CO₂, VOC/tVOC, particulates, HCHO, Radon, or climate metrics without a purifier fan entity:
+
+```yaml
+type: custom:dracula-air-quality-card
+mode: sensor
+name: Office Air Monitor
+sensors:
+  pm25: sensor.office_air_pm25
+  pm10: sensor.office_air_pm10
+  co: sensor.office_air_co
+  co2: sensor.office_air_co2
+  voc: sensor.office_air_voc
+  tvoc: sensor.office_air_tvoc
+  temperature: sensor.office_air_temperature
+  humidity: sensor.office_air_humidity
+  co_alarm: binary_sensor.office_co_alarm
+```
 
 ## Options
 
@@ -181,16 +191,16 @@ To group by floor or area instead, change `group_by: room` (each entry uses its 
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
 | `type` | `string` | **Required** | `custom:dracula-air-quality-card` |
-| `entity` | `string` | — | Primary `fan.*` entity ID for Purifier Mode |
-| `mode` | `string` | Auto | `"purifier"`, `"sensor"`, or `"overview"` (inferred automatically from `entity`, `sensors`, or `devices`) |
-| `sensors` | `object` | — | Map of sensor entity IDs for Standalone AQ Sensor Mode (see Sensor Map below) |
-| `devices` | `list` | — | List of entity IDs (`"fan.room"`) or device objects (`{ entity, name, room, group, sensors, ... }`) for Whole-Home Overview Mode (alias: `entities`) |
+| `devices` | `list` | — | **Standard mode:** List of entity IDs (`"fan.room"`) or device objects (`{ entity, name, room, group, sensors, ... }`) for Whole-Home Overview (alias: `entities`) |
 | `group_by` | `string` | `"type"` | Overview grouping mode: `"type"` (`Air Purifiers` / `Air Quality Sensors`), `"room"` (by each item's `room` / `group` label), or `"none"` (flat list) |
-| `name` | `string` | Entity friendly name | Custom card header title |
+| `entity` | `string` | — | Optional: Primary `fan.*` entity ID for Single Purifier Mode |
+| `sensors` | `object` | — | Optional: Map of sensor entity IDs for Standalone AQ Sensor Mode (see Sensor Map below) |
+| `mode` | `string` | Auto | `"overview"` (standard), `"purifier"`, or `"sensor"` (inferred automatically from `devices`, `entity`, or `sensors`) |
+| `name` | `string` | `"Whole-Home Air Quality"` | Custom card header title |
 | `theme` | `string` | `"dracula"` | `"dracula"` for built-in Dracula styling, or `"auto"` to inherit Home Assistant theme variables |
 | `compact` | `boolean` | `false` | Reduces padding and vertical spacing for dense dashboards |
 | `show_cadr` | `boolean` | `true` | Show CADR readout in Purifier Mode when available |
-| `show_filter` | `boolean` | `true` | Show filter life progress bar in Purifier Mode when available |
+| `show_filter` | `boolean` | `true` | Show filter life progress bar when available |
 | `show_timer` | `boolean` | `true` | Show timer controls and countdown in Purifier Mode when available |
 
 ### Purifier Entity Overrides
@@ -230,7 +240,7 @@ All optional — auto-discovered from the `entity` prefix and `device_class` whe
 
 ### `sensors` Map Keys
 
-Used in Standalone Air Quality Sensor Mode and sensor-only entries inside `devices`:
+Used in sensor-only entries inside `devices` and in optional Standalone Air Quality Sensor Mode:
 
 | Key | Measurement |
 | --- | --- |
@@ -255,13 +265,13 @@ Used in Standalone Air Quality Sensor Mode and sensor-only entries inside `devic
 
 ## Local Demo
 
-To preview all three modes locally without a Home Assistant instance:
+To preview the Whole-Home Overview alongside the optional single-device modes locally without a Home Assistant instance:
 
 ```bash
 python3 -m http.server 8080
 ```
 
-Then open `http://localhost:8080/demo.html` in your browser. All controls (power, fan speed, operating mode, auto profile, display, child lock, timer, master buttons, filter tabs, collapsible group headers, and expandable room rows) are interactive.
+Then open `http://localhost:8080/demo.html` in your browser. All controls (master buttons, filter tabs, collapsible group headers, expandable room rows, power, fan speed, operating mode, auto profile, display, child lock, and timer) are interactive.
 
 ## License
 
