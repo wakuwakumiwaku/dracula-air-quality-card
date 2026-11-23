@@ -240,6 +240,17 @@ sensors:
   co_alarm: binary_sensor.office_co_alarm
 ```
 
+## 24/7 Smart Automation Blueprint
+
+Pair the card with the included Home Assistant Automation Blueprint ([`blueprints/smart-air-purifier.yaml`](./blueprints/smart-air-purifier.yaml)) to run any room's air purifier(s) automatically from any PM2.5, AQI, CO₂, or VOC sensor:
+
+[![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fwakuwakumiwaku%2Fdracula-air-quality-card%2Fblob%2Fmain%2Fblueprints%2Fsmart-air-purifier.yaml)
+
+- **Boost / Medium / Clean thresholds with hysteresis** (`for:` delay prevents rapid fan-speed cycling).
+- **Quiet Hours** — Automatically caps fan speed overnight so bedroom purifiers stay whisper-quiet.
+- **Optional CO Safety Alert** — Sends an immediate notification if carbon monoxide reaches `>= 35 ppm`.
+- **One-Tap Card Toggle** — Pass the created automation to `automation_entity` on any purifier entry to show a clean **Auto Rule** toggle chip inside its control panel.
+
 ## Options
 
 ### Main Options
@@ -305,6 +316,7 @@ All optional — auto-discovered from the `entity` prefix and `device_class` whe
 | `auto_mode_entity` | Auto-mode profile selector (`select.*`) |
 | `timer_entity` | Sleep timer input (`number.*` or `select.*`) |
 | `timer_remaining_entity` | Remaining timer readout (`sensor.*`) |
+| `automation_entity` | Optional room automation (`automation.*`) rendered as a subtle `Auto Rule` toggle chip |
 | `error_entity` | Device fault / error indicator (`binary_sensor.*` or `sensor.*`) |
 
 ### `sensors` Map Keys

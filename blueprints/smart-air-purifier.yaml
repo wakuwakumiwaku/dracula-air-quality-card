@@ -1,0 +1,226 @@
+blueprint:
+  name: Dracula Smart Air Purifier Control
+  description: >-
+    Automatically adjust one or more air purifiers based on any room air quality
+    sensor (PM2.5, AQI, CO₂, or VOC) with hysteresis to avoid speed flickering,
+    configurable Quiet Hours overnight, and an optional CO safety alert.
+  domain: automation
+  source_url: https://github.com/wakuwakumiwaku/dracula-air-quality-card/blob/main/blueprints/smart-air-purifier.yaml
+  input:
+    air_quality_sensor:
+      name: Air Quality Sensor
+      description: Primary room sensor (PM2.5, AQI, CO₂, or VOC) used to drive purifier speed.
+      selector:
+        entity:
+          domain: sensor
+    purifiers:
+      name: Air Purifier(s)
+      description: One or more fan entities to control automatically.
+      selector:
+        target:
+          entity:
+            domain: fan
+    boost_threshold:
+      name: Boost Threshold
+      description: Sensor reading at or above which purifiers switch to Boost speed.
+      default: 35
+      selector:
+        number:
+          min: 1
+          max: 5000
+          step: 1
+    medium_threshold:
+      name: Medium Threshold
+      description: Sensor reading at or above which purifiers switch to Medium speed.
+      default: 15
+      selector:
+        number:
+          min: 1
+          max: 5000
+          step: 1
+    clean_threshold:
+      name: Clean Threshold
+      description: Sensor reading at or below which air is considered clean.
+      default: 8
+      selector:
+        number:
+          min: 0
+          max: 5000
+          step: 1
+    hysteresis_minutes:
+      name: Hysteresis Delay (minutes)
+      description: How long a reading must stay past a threshold before changing fan speed.
+      default: 3
+      selector:
+        number:
+          min: 0
+          max: 30
+          unit_of_measurement: min
+    boost_speed:
+      name: Boost Fan Speed (%)
+      default: 100
+      selector:
+        number:
+          min: 20
+          max: 100
+          unit_of_measurement: "%"
+    medium_speed:
+      name: Medium Fan Speed (%)
+      default: 66
+      selector:
+        number:
+          min: 10
+          max: 100
+          unit_of_measurement: "%"
+    clean_speed:
+      name: Clean Fan Speed (%)
+      description: Set to 0 to turn purifiers off when air is clean, or keep low airflow (e.g. 25–33%).
+      default: 33
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: "%"
+    quiet_hours_enabled:
+      name: Enable Quiet Hours
+      description: Cap fan speed overnight so purifiers stay whisper-quiet while sleeping.
+      default: true
+      selector:
+        boolean: {}
+    quiet_hours_start:
+      name: Quiet Hours Start
+      default: "22:30:00"
+      selector:
+        time: {}
+    quiet_hours_end:
+      name: Quiet Hours End
+      default: "07:00:00"
+      selector:
+        time: {}
+    quiet_hours_speed:
+      name: Quiet Hours Max Speed (%)
+      default: 25
+      selector:
+        number:
+          min: 1
+          max: 50
+          unit_of_measurement: "%"
+    co_sensor:
+      name: CO Safety Sensor (Optional)
+      description: Optional carbon monoxide sensor (ppm) for high-CO safety notifications.
+      default: ""
+      selector:
+        entity:
+          domain: sensor
+    co_threshold:
+      name: CO Alert Threshold (ppm)
+      default: 35
+      selector:
+        number:
+          min: 10
+          max: 200
+          unit_of_measurement: ppm
+    notify_service:
+      name: Notification Service (Optional)
+      description: Service to call on CO alert (e.g. notify.mobile_app_phone). Leave blank to skip.
+      default: ""
+      selector:
+        text: {}
+
+mode: restart
+max_exceeded: silent
+
+variables:
+  aq_sensor: !input air_quality_sensor
+  boost_th: !input boost_threshold
+  med_th: !input medium_threshold
+  clean_th: !input clean_threshold
+  boost_pct: !input boost_speed
+  med_pct: !input medium_speed
+  clean_pct: !input clean_speed
+  quiet_on: !input quiet_hours_enabled
+  quiet_start: !input quiet_hours_start
+  quiet_end: !input quiet_hours_end
+  quiet_pct: !input quiet_hours_speed
+  co_ent: !input co_sensor
+  co_th: !input co_threshold
+  notify_svc: !input notify_service
+
+trigger:
+  - platform: state
+    id: aq_change
+    entity_id: !input air_quality_sensor
+    for:
+      minutes: !input hysteresis_minutes
+  - platform: time
+    id: quiet_start_trigger
+    at: !input quiet_hours_start
+  - platform: time
+    id: quiet_end_trigger
+    at: !input quiet_hours_end
+  - platform: template
+    id: co_alert
+    value_template: >-
+      {{ co_ent | string | length > 0 and (states(co_ent) | float(-1)) >= (co_th | float(35)) }}
+
+action:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: co_alert
+          - condition: template
+            value_template: "{{ notify_svc | string | length > 0 }}"
+        sequence:
+          - service: "{{ notify_svc }}"
+            data:
+              title: "CO Safety Alert"
+              message: >-
+                Elevated carbon monoxide detected ({{ states(co_ent) }} ppm).
+                Ventilate immediately and check fuel-burning appliances.
+    default:
+      - variables:
+          reading: "{{ states(aq_sensor) | float(-1) }}"
+          now_str: "{{ now().strftime('%H:%M:%S') }}"
+          in_quiet_hours: >-
+            {% if not quiet_on %}
+              false
+            {% elif quiet_start > quiet_end %}
+              {{ now_str >= quiet_start or now_str < quiet_end }}
+            {% else %}
+              {{ now_str >= quiet_start and now_str < quiet_end }}
+            {% endif %}
+          desired_pct: >-
+            {% if reading < 0 %}
+              -1
+            {% elif reading >= boost_th %}
+              {{ boost_pct }}
+            {% elif reading >= med_th %}
+              {{ med_pct }}
+            {% elif reading <= clean_th %}
+              {{ clean_pct }}
+            {% else %}
+              {{ clean_pct }}
+            {% endif %}
+          final_pct: >-
+            {% if desired_pct < 0 %}
+              -1
+            {% elif in_quiet_hours and desired_pct > quiet_pct %}
+              {{ quiet_pct }}
+            {% else %}
+              {{ desired_pct }}
+            {% endif %}
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ final_pct == 0 }}"
+            sequence:
+              - service: fan.turn_off
+                target: !input purifiers
+          - conditions:
+              - condition: template
+                value_template: "{{ final_pct > 0 }}"
+            sequence:
+              - service: fan.set_percentage
+                target: !input purifiers
+                data:
+                  percentage: "{{ final_pct }}"

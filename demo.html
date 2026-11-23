@@ -380,6 +380,11 @@
         state: "60",
         attributes: { unit_of_measurement: "min", friendly_name: "Bedroom Timer Remaining" },
       },
+      "automation.bedroom_air_quality": {
+        entity_id: "automation.bedroom_air_quality",
+        state: "on",
+        attributes: { friendly_name: "Bedroom Auto Air Quality" },
+      },
 
       /* --- 2. Living Room: Levoit Core 400S --- */
       "fan.living_room_levoit_core_400s": {
@@ -762,7 +767,7 @@
           }
         }
         logActivity(`Selected ${data.option} on ${ent.attributes.friendly_name || slug}`);
-      } else if (domain === "switch" || domain === "light") {
+      } else if (domain === "switch" || domain === "light" || domain === "automation") {
         const nextState = service === "turn_on" ? "on" : "off";
         states[id] = { ...ent, state: nextState };
         logActivity(`${ent.attributes.friendly_name || slug} → ${nextState.toUpperCase()}`);
@@ -806,7 +811,7 @@
       show_sparklines: true,
       outdoor_pm25_entity: "sensor.outdoor_pm25",
       devices: [
-        { entity: "fan.bedroom_levoit_core_300s", name: "Bedroom · Core 300S", room: "Upstairs" },
+        { entity: "fan.bedroom_levoit_core_300s", name: "Bedroom · Core 300S", room: "Upstairs", automation_entity: "automation.bedroom_air_quality" },
         { entity: "fan.living_room_levoit_core_400s", name: "Living Room · Core 400S", room: "Main Floor" },
         { entity: "fan.kitchen_levoit_vital_200s", name: "Kitchen · Vital 200S", room: "Main Floor" },
         { entity: "fan.master_xiaomi_4_pro", name: "Master · Xiaomi 4 Pro", room: "Upstairs" },

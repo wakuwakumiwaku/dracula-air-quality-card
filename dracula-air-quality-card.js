@@ -6,7 +6,7 @@
  *   3. Standalone Air Quality Sensor Mode (Optional — PM2.5/10/1, AQI, CO, CO2, VOC/tVOC, NOx/NO2, O3, HCHO, Radon, Temp, Humidity, Pressure)
  */
 
-const CARD_VERSION = "1.7.0";
+const CARD_VERSION = "1.8.0";
 const HISTORY_TTL_MS = 300_000;
 const HISTORY_CACHE = new Map();
 const HISTORY_INFLIGHT = new Set();
@@ -95,7 +95,7 @@ const I18N = {
     display: "Display", lock: "Lock", timer: "Timer", trend_24h: "24h Trend",
     sort_default: "Order", sort_pm25: "Worst PM2.5", sort_filter: "Low Filter", sort_name: "Name",
     devices_word: "devices", device_word: "device", sensors_monitored: "sensors monitored",
-    ventilate: "Ventilate", keep_closed: "Keep Closed", outdoor: "Outdoor", belongs_to: "belongs to",
+    ventilate: "Ventilate", keep_closed: "Keep Closed", outdoor: "Outdoor", belongs_to: "belongs to", auto_rule: "Auto Rule",
   },
   de: {
     good: "Gut", moderate: "Mäßig", sensitive: "Sensibel", unhealthy: "Ungesund",
@@ -114,7 +114,7 @@ const I18N = {
     display: "Display", lock: "Sperre", timer: "Timer", trend_24h: "24h Verlauf",
     sort_default: "Standard", sort_pm25: "PM2.5 hoch", sort_filter: "Filter niedrig", sort_name: "Name",
     devices_word: "Geräte", device_word: "Gerät", sensors_monitored: "Sensoren aktiv",
-    ventilate: "Lüften", keep_closed: "Geschlossen halten", outdoor: "Außen", belongs_to: "gehört zu",
+    ventilate: "Lüften", keep_closed: "Geschlossen halten", outdoor: "Außen", belongs_to: "gehört zu", auto_rule: "Auto-Regel",
   },
   fr: {
     good: "Bon", moderate: "Modéré", sensitive: "Sensible", unhealthy: "Malsain",
@@ -133,7 +133,7 @@ const I18N = {
     display: "Écran", lock: "Verrou", timer: "Minuterie", trend_24h: "Tendance 24h",
     sort_default: "Ordre", sort_pm25: "PM2.5 max", sort_filter: "Filtre bas", sort_name: "Nom",
     devices_word: "appareils", device_word: "appareil", sensors_monitored: "capteurs suivis",
-    ventilate: "Aérer", keep_closed: "Garder fermé", outdoor: "Extérieur", belongs_to: "appartient à",
+    ventilate: "Aérer", keep_closed: "Garder fermé", outdoor: "Extérieur", belongs_to: "appartient à", auto_rule: "Règle Auto",
   },
   es: {
     good: "Bueno", moderate: "Moderado", sensitive: "Sensible", unhealthy: "Insalubre",
@@ -152,7 +152,7 @@ const I18N = {
     display: "Pantalla", lock: "Bloqueo", timer: "Temporizador", trend_24h: "Tendencia 24h",
     sort_default: "Orden", sort_pm25: "Peor PM2.5", sort_filter: "Filtro bajo", sort_name: "Nombre",
     devices_word: "dispositivos", device_word: "dispositivo", sensors_monitored: "sensores activos",
-    ventilate: "Ventilar", keep_closed: "Mantener cerrado", outdoor: "Exterior", belongs_to: "pertenece a",
+    ventilate: "Ventilar", keep_closed: "Mantener cerrado", outdoor: "Exterior", belongs_to: "pertenece a", auto_rule: "Regla Auto",
   },
 };
 
@@ -167,6 +167,7 @@ const ICONS = {
   chevron: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>`,
   alert: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
   reset: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>`,
+  bolt: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,
 };
 
 /* ---------- Core Helpers ---------- */
@@ -570,6 +571,10 @@ function resolveDeviceState(hass, itemConfig, discoveryCache = null, thresholds 
     modes = fanAttrs.preset_modes; currentMode = fanAttrs.preset_mode || null; modeSource = { type: "fan", entityId: fanId };
   }
 
+  const autoRuleId = cfg.automation_entity || null;
+  if (autoRuleId) watchedIds.add(autoRuleId);
+  const autoRuleSt = autoRuleId ? states[autoRuleId] : null;
+
   return {
     cfg, isPurifier,
     isUnavailable: isPurifier && (!fanState || isUnavailable(fanState.state)),
@@ -580,6 +585,7 @@ function resolveDeviceState(hass, itemConfig, discoveryCache = null, thresholds 
     percentageStep: toNumber(fanAttrs.percentage_step) || 25,
     sensors, cadr, filter, filterLow,
     filterResetId: filterResetId && states[filterResetId] ? filterResetId : null,
+    automation: autoRuleSt ? { entityId: autoRuleId, on: autoRuleSt.state === "on" } : null,
     coAlarm: coAlarmOn ? { entityId: coAlarmId, type: "CO Alarm" } : gasAlarmOn ? { entityId: gasAlarmId, type: "Gas Alarm" } : null,
     coDanger,
     display: displaySt ? { entityId: displayId, on: displaySt.state === "on", domain: displayId.split(".")[0] } : null,
@@ -639,6 +645,15 @@ const CARD_CSS = `
     border-radius: var(--daq-radius); box-shadow: var(--daq-shadow), inset 0 1px 0 rgba(248, 248, 242, 0.05);
     padding: 18px; display: flex; flex-direction: column; gap: 14px; position: relative; overflow: hidden;
   }
+  .card.ambient::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: var(--daq-ambient, linear-gradient(90deg, var(--daq-purple), var(--daq-green)));
+    opacity: 0.85; pointer-events: none;
+  }
+  .card.ambient-good { --daq-ambient: linear-gradient(90deg, var(--daq-purple), var(--daq-green)); }
+  .card.ambient-moderate { --daq-ambient: linear-gradient(90deg, var(--daq-purple), var(--daq-yellow)); }
+  .card.ambient-warn { --daq-ambient: linear-gradient(90deg, var(--daq-orange), var(--daq-yellow)); }
+  .card.ambient-alert { --daq-ambient: linear-gradient(90deg, var(--daq-red), var(--daq-pink)); border-color: rgba(255, 85, 85, 0.45); }
   .card.compact { padding: 13px 14px; gap: 10px; }
   .header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   .title-wrap { min-width: 0; flex: 1; }
@@ -703,6 +718,7 @@ const CARD_CSS = `
   .pill-btn:hover { border-color: var(--daq-purple); color: var(--daq-fg); }
   .pill-btn.active { background: rgba(189, 147, 249, 0.2); border-color: var(--daq-purple); color: var(--daq-fg); }
   .pill-btn.active-cyan { background: rgba(139, 233, 253, 0.16); border-color: var(--daq-cyan); color: var(--daq-cyan); }
+  .pill-btn.active-green { background: rgba(80, 250, 123, 0.14); border-color: var(--daq-green); color: var(--daq-green); }
   .pill-btn.warn { background: rgba(255, 184, 108, 0.16); border-color: rgba(255, 184, 108, 0.55); color: var(--daq-orange); }
   .pill-btn.danger { background: rgba(255, 85, 85, 0.2); border-color: var(--daq-red); color: #ff7b7b; }
   .pill-btn svg { width: 14px; height: 14px; }
@@ -753,7 +769,7 @@ const CARD_CSS = `
   .mini-badge.alert { border-color: rgba(255, 85, 85, 0.65); background: rgba(255, 85, 85, 0.18); color: #ff6e6e; }
   .chevron { width: 16px; height: 16px; color: var(--daq-muted); transition: transform 0.2s ease; display: inline-flex; align-items: center; justify-content: center; }
   .room-item.expanded .chevron { transform: rotate(180deg); color: var(--daq-purple); }
-  .room-drawer { padding: 10px 12px 12px; border-top: 1px solid var(--daq-border); background: rgba(40, 42, 54, 0.55); display: flex; flex-direction: column; gap: 10px; }
+  .room-drawer { padding: 10px 12px 12px; border-top: 1px solid var(--daq-border); background: var(--daq-surface-2); display: flex; flex-direction: column; gap: 10px; }
   .empty-state { padding: 20px; text-align: center; color: var(--daq-subtext); font-size: 13px; background: var(--daq-surface); border-radius: 12px; border: 1px dashed var(--daq-border); }
   .safety-banner { display: flex; align-items: center; gap: 10px; padding: 10px 13px; border-radius: 12px; background: rgba(255, 85, 85, 0.16); border: 1px solid rgba(255, 85, 85, 0.65); color: #ff6e6e; font-size: 12.5px; font-weight: 700; cursor: pointer; }
   .safety-banner svg { width: 18px; height: 18px; flex-shrink: 0; color: var(--daq-red); }
@@ -803,16 +819,21 @@ const CARD_CSS = `
   }
   .room-row.modal-trigger .chevron { transform: rotate(-90deg); }
   @keyframes daqFadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes daqPopIn { from { opacity: 0; transform: scale(0.97) translateY(6px); } to { opacity: 1; transform: scale(1) translateY(0); } }
   .modal-backdrop {
     position: fixed; inset: 0; z-index: 9999;
     background: rgba(15, 16, 22, 0.72);
     backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
     display: flex; align-items: center; justify-content: center;
-    padding: 18px; animation: daqFadeIn 0.15s ease;
+    padding: 18px; animation: daqFadeIn 0.16s ease;
   }
   .modal-dialog {
     width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto;
     border-radius: var(--daq-radius); box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+    animation: daqPopIn 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .modal-backdrop, .modal-dialog { animation: none !important; transition: none !important; }
   }
   .modal-close {
     width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--daq-border);
@@ -1135,6 +1156,9 @@ class DraculaAirQualityCard extends HTMLElement {
       const { domain, entityId, on } = dev.childLock;
       this._call(domain === "lock" ? "lock" : domain, domain === "lock" ? (on ? "unlock" : "lock") : (on ? "turn_off" : "turn_on"), { entity_id: entityId });
     } else if (action === "timer") this._cycleTimer(dev);
+    else if (action === "automation" && dev.automation) {
+      this._call("automation", dev.automation.on ? "turn_off" : "turn_on", { entity_id: dev.automation.entityId });
+    }
   }
 
   /* ---------- Shared Render Blocks ---------- */
@@ -1301,8 +1325,8 @@ class DraculaAirQualityCard extends HTMLElement {
       html += `<div class="speed-wrap"><div class="speed-head"><span class="section-label" style="margin:0">${escapeHtml(this._t("fan_speed"))}</span><span class="speed-val">${dev.isOn ? `${Math.round(curPct)}%` : escapeHtml(this._t("off"))}</span></div><div class="speed-steps" style="grid-template-columns:repeat(${steps.length},1fr)">${steps.map((s, i) => `<button type="button" class="speed-step ${dev.isOn && Math.abs(curPct - s) <= tol ? "current" : dev.isOn && curPct >= s - 5 ? "filled" : ""}" data-action="speed" data-value="${s}" ${idxAttr}>L${i + 1} · ${s}%</button>`).join("")}</div></div>`;
     }
     const showTimer = this._config.show_timer !== false;
-    if (dev.display || dev.childLock || (showTimer && (dev.timer || dev.timerLabel))) {
-      html += `<div class="utility-bar">${dev.display ? `<button type="button" class="pill-btn xs ${dev.display.on ? "active-cyan" : ""}" data-action="display" ${idxAttr}>${ICONS.display} ${escapeHtml(this._t("display"))}</button>` : ""}${dev.childLock ? `<button type="button" class="pill-btn xs ${dev.childLock.on ? "active" : ""}" data-action="child-lock" ${idxAttr}>${dev.childLock.on ? ICONS.lock : ICONS.unlock} ${escapeHtml(this._t("lock"))}</button>` : ""}${showTimer && dev.timer ? `<button type="button" class="pill-btn xs ${dev.timerLabel ? "active-cyan" : ""}" data-action="timer" ${idxAttr}>${ICONS.timer} ${dev.timerLabel ? escapeHtml(dev.timerLabel) : escapeHtml(this._t("timer"))}</button>` : showTimer && dev.timerLabel ? `<span class="stat-chip" data-action="more-info" data-entity="${escapeHtml(dev.timerRemaining?.entityId || "")}">${ICONS.timer}<span class="v">${escapeHtml(dev.timerLabel)}</span></span>` : ""}</div>`;
+    if (dev.display || dev.childLock || dev.automation || (showTimer && (dev.timer || dev.timerLabel))) {
+      html += `<div class="utility-bar">${dev.display ? `<button type="button" class="pill-btn xs ${dev.display.on ? "active-cyan" : ""}" data-action="display" ${idxAttr}>${ICONS.display} ${escapeHtml(this._t("display"))}</button>` : ""}${dev.childLock ? `<button type="button" class="pill-btn xs ${dev.childLock.on ? "active" : ""}" data-action="child-lock" ${idxAttr}>${dev.childLock.on ? ICONS.lock : ICONS.unlock} ${escapeHtml(this._t("lock"))}</button>` : ""}${showTimer && dev.timer ? `<button type="button" class="pill-btn xs ${dev.timerLabel ? "active-cyan" : ""}" data-action="timer" ${idxAttr}>${ICONS.timer} ${dev.timerLabel ? escapeHtml(dev.timerLabel) : escapeHtml(this._t("timer"))}</button>` : showTimer && dev.timerLabel ? `<span class="stat-chip" data-action="more-info" data-entity="${escapeHtml(dev.timerRemaining?.entityId || "")}">${ICONS.timer}<span class="v">${escapeHtml(dev.timerLabel)}</span></span>` : ""}${dev.automation ? `<button type="button" class="pill-btn xs ${dev.automation.on ? "active-green" : ""}" data-action="automation" ${idxAttr}>${ICONS.bolt} ${escapeHtml(this._t("auto_rule"))}</button>` : ""}</div>`;
     }
     return html;
   }
@@ -1311,13 +1335,20 @@ class DraculaAirQualityCard extends HTMLElement {
 
   _renderPurifierCardBody(dev, idxAttr = "", closeBtn = "") {
     const hero = this._pickHeroMetric(dev);
+    const isSleepMode = dev.currentMode?.toLowerCase().includes("sleep");
     const statusParts = dev.isUnavailable
       ? [this._t("unavailable")]
       : !dev.isOn
       ? [this._t("standby")]
       : [
           dev.currentMode ? titleCase(dev.currentMode) : null,
-          dev.currentMode?.toLowerCase().includes("auto") && dev.autoMode?.current ? titleCase(dev.autoMode.current) : dev.percentage !== null ? `${Math.round(dev.percentage)}%` : null,
+          isSleepMode
+            ? null
+            : dev.currentMode?.toLowerCase().includes("auto") && dev.autoMode?.current
+            ? titleCase(dev.autoMode.current)
+            : dev.percentage !== null
+            ? `${Math.round(dev.percentage)}%`
+            : null,
         ].filter(Boolean);
 
     const extraSensors = {};
@@ -1505,8 +1536,16 @@ class DraculaAirQualityCard extends HTMLElement {
       rowsHtml = (pList.length ? renderGroup("type:purifiers", this._t("air_purifiers"), pList) : "") + (sList.length ? renderGroup("type:sensors", this._t("air_quality_sensors"), sList) : "");
     }
 
+    const ambientClass = worstCoRoom
+      ? "ambient ambient-alert"
+      : (worstPmRoom?.sensors.pm25?.num ?? 0) > 35 || (maxCo2Room?.sensors.co2?.num ?? 0) > 1200
+      ? "ambient ambient-warn"
+      : (worstPmRoom?.sensors.pm25?.num ?? 0) > 12 || (maxCo2Room?.sensors.co2?.num ?? 0) > 800
+      ? "ambient ambient-moderate"
+      : "ambient ambient-good";
+
     return `
-      <div class="card ${this._config.compact ? "compact" : ""}">
+      <div class="card ${ambientClass} ${this._config.compact ? "compact" : ""}">
         ${
           this._config.show_header !== false
             ? `<div class="header">
@@ -1570,8 +1609,9 @@ class DraculaAirQualityCard extends HTMLElement {
     if (dev.isPurifier) {
       const filterStr = dev.filter?.num !== null && dev.filter?.num !== undefined ? `Filter ${Math.round(dev.filter.num)}%` : null;
       if (dev.isOn) {
+        const isSleep = dev.currentMode?.toLowerCase().includes("sleep");
         let speedStr = null;
-        if (dev.percentage !== null) {
+        if (!isSleep && dev.percentage !== null) {
           const step = dev.percentageStep || 25;
           const lvl = Math.max(1, Math.round(dev.percentage / step));
           speedStr = `Speed ${lvl} (${Math.round(dev.percentage)}%)`;
@@ -1743,7 +1783,7 @@ class DraculaAirQualityCardEditor extends HTMLElement {
       if (el.id === "auto_discover") this._render();
       return;
     }
-    const strKeys = ["theme", "language", "group_by", "sort_by", "default_filter", "detail_view", "entity", "outdoor_pm25_entity"];
+    const strKeys = ["theme", "language", "group_by", "sort_by", "default_filter", "detail_view", "entity", "automation_entity", "outdoor_pm25_entity"];
     if (strKeys.includes(el.id) || el.id === "name") {
       const next = { ...this._config };
       if (el.value) next[el.id] = el.value; else delete next[el.id];
@@ -1756,6 +1796,7 @@ class DraculaAirQualityCardEditor extends HTMLElement {
     const states = Object.keys(this._hass?.states || {});
     const fans = states.filter((id) => id.startsWith("fan."));
     const sens = states.filter((id) => id.startsWith("sensor."));
+    const autos = states.filter((id) => id.startsWith("automation."));
     const devices = this._config.devices || this._config.entities || [];
     const sensors = this._config.sensors || {};
 
@@ -1796,7 +1837,7 @@ class DraculaAirQualityCardEditor extends HTMLElement {
           ${mode === "overview" ? `<label class="check"><input type="checkbox" id="auto_discover" ${this._config.auto_discover ? "checked" : ""} /> Auto-Discover</label><label class="check"><input type="checkbox" id="include_purifier_sensors" ${this._config.include_purifier_sensors !== false ? "checked" : ""} /> Purifier Sensors</label>` : ""}
           ${mode === "purifier" ? `<label class="check"><input type="checkbox" id="show_cadr" ${this._config.show_cadr !== false ? "checked" : ""} /> CADR</label><label class="check"><input type="checkbox" id="show_filter" ${this._config.show_filter !== false ? "checked" : ""} /> Filter</label><label class="check"><input type="checkbox" id="show_timer" ${this._config.show_timer !== false ? "checked" : ""} /> Timer</label>` : ""}
         </div>
-        ${mode === "purifier" ? `<div class="section"><div class="section-title">Purifier Entity</div><div class="field"><label>Fan Entity</label><input type="text" id="entity" list="fan-list" value="${escapeHtml(this._config.entity || "")}" placeholder="fan.bedroom_air_purifier" /><datalist id="fan-list">${fans.map((id) => `<option value="${escapeHtml(id)}">`).join("")}</datalist></div></div>` : ""}
+        ${mode === "purifier" ? `<div class="section"><div class="section-title">Purifier Entity</div><div class="row"><div class="field"><label>Fan Entity</label><input type="text" id="entity" list="fan-list" value="${escapeHtml(this._config.entity || "")}" placeholder="fan.bedroom_air_purifier" /><datalist id="fan-list">${fans.map((id) => `<option value="${escapeHtml(id)}">`).join("")}</datalist></div><div class="field"><label>Automation Rule (optional)</label><input type="text" id="automation_entity" list="auto-list" value="${escapeHtml(this._config.automation_entity || "")}" placeholder="automation.bedroom_air_quality" /><datalist id="auto-list">${autos.map((id) => `<option value="${escapeHtml(id)}">`).join("")}</datalist></div></div></div>` : ""}
         ${mode === "sensor" ? `<div class="section"><div class="section-title">Air Quality Sensors</div><datalist id="sensor-list">${sens.map((id) => `<option value="${escapeHtml(id)}">`).join("")}</datalist><div class="row">${SENSOR_KEYS.map((k) => `<div class="field"><label>${escapeHtml(SENSOR_META[k].label)}</label><input type="text" data-sensor="${k}" list="sensor-list" value="${escapeHtml(sensors[k] || "")}" placeholder="sensor.room_${k}" /></div>`).join("")}</div></div>` : ""}
         ${mode === "overview" ? `
           <div class="section">
