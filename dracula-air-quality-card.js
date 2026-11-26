@@ -1310,7 +1310,7 @@ class DraculaAirQualityCard extends HTMLElement {
   _renderPurifierControls(dev, idxAttr = "") {
     const isAuto = dev.currentMode?.toLowerCase().includes("auto");
     const stepCount = Math.min(5, Math.max(3, Math.round(100 / (dev.percentageStep || 25))));
-    const steps = Array.from({ length: stepCount }, (_, i) => (i === stepCount - 1 ? 100 : Math.round(((i + 1) * 100) / stepCount)));
+    const steps = Array.from({ length: stepCount }, (_, i) => (i === stepCount - 1 ? 100 : Math.floor(((i + 1) * 100) / stepCount)));
     const curPct = dev.isOn ? dev.percentage ?? 0 : 0;
     let html = "";
 
