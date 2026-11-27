@@ -756,7 +756,9 @@ const CARD_CSS = `
   }
   .metric-tile::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px; border-radius: 0 3px 3px 0; background: var(--tile-accent, var(--daq-purple)); }
   .metric-tile:hover { border-color: var(--daq-purple); transform: translateY(-1px); }
-  .metric-label { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--daq-subtext); padding-left: 4px; }
+  .metric-head { display: flex; align-items: center; justify-content: space-between; gap: 4px; padding-left: 4px; }
+  .metric-label { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--daq-subtext); }
+  .metric-src { font-size: 9px; font-weight: 700; letter-spacing: 0.04em; color: var(--daq-cyan); background: rgba(139, 233, 253, 0.12); border: 1px solid rgba(139, 233, 253, 0.28); border-radius: 5px; padding: 1px 4px; white-space: nowrap; }
   .metric-val-row { display: flex; align-items: baseline; gap: 4px; padding-left: 4px; }
   .metric-val { font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--daq-fg); line-height: 1.1; }
   .metric-unit { font-size: 10.5px; color: var(--daq-muted); font-weight: 600; }
@@ -1312,6 +1314,25 @@ class DraculaAirQualityCard extends HTMLElement {
     return { key: "none", metricLabel: "AQ", valueText: "—", unitText: "", entityId: null, label: this._t("no_data"), color: "var(--daq-muted)", pct: 0 };
   }
 
+  _resolveSensorSource(key, s) {
+    if (!s?.entityId) return "";
+    const custom = this._config?.sensor_sources;
+    if (custom && typeof custom === "object") {
+      if (custom[s.entityId]) return String(custom[s.entityId]);
+      if (custom[key]) return String(custom[key]);
+    }
+    const st = this._hass?.states?.[s.entityId];
+    const fn = st?.attributes?.friendly_name || "";
+    const chipMatch = fn.match(/\b(SCD4[01]|SGP4[01]|SGP30|ZE07-?CO|SEN5[45]|SPS30|PMS\d{4}|BME[26]80|SHT[34]\d|MH-?Z19[BC]?|ENS160|CCS811|AHT2[01])\b/i);
+    if (chipMatch) return chipMatch[1].toUpperCase();
+    if (/airesp32/i.test(s.entityId)) {
+      if (key === "co2" || key === "temperature" || key === "humidity") return "SCD41";
+      if (key === "voc" || key === "nox") return "SGP41";
+      if (key === "co") return "ZE07-CO";
+    }
+    return "";
+  }
+
   _renderMetricTiles(sensors) {
     const entries = SENSOR_KEYS.filter((k) => sensors[k]);
     if (!entries.length) return "";
@@ -1319,7 +1340,9 @@ class DraculaAirQualityCard extends HTMLElement {
       const s = sensors[key], meta = SENSOR_META[key];
       const color = evaluateMetricColor(key, s.num ?? s.raw, s.unit, this._thresholds);
       const valStr = s.num !== null ? formatNum(s.num, meta.decimals) : !isUnavailable(s.raw) ? titleCase(s.raw) : "—";
-      return `<div class="metric-tile" style="--tile-accent:${color}" role="button" tabindex="0" title="Click for history" data-action="more-info" data-entity="${escapeHtml(s.entityId)}"><span class="metric-label">${escapeHtml(meta.label)}</span><div class="metric-val-row"><span class="metric-val">${escapeHtml(valStr)}</span>${s.unit ? `<span class="metric-unit">${escapeHtml(s.unit)}</span>` : ""}</div></div>`;
+      const src = this._resolveSensorSource(key, s);
+      const tip = src ? `${meta.label} (${src}) — Click for history` : "Click for history";
+      return `<div class="metric-tile" style="--tile-accent:${color}" role="button" tabindex="0" title="${escapeHtml(tip)}" data-action="more-info" data-entity="${escapeHtml(s.entityId)}"><div class="metric-head"><span class="metric-label">${escapeHtml(meta.label)}</span>${src ? `<span class="metric-src">${escapeHtml(src)}</span>` : ""}</div><div class="metric-val-row"><span class="metric-val">${escapeHtml(valStr)}</span>${s.unit ? `<span class="metric-unit">${escapeHtml(s.unit)}</span>` : ""}</div></div>`;
     }).join("")}</div>`;
   }
 
@@ -1433,7 +1456,7 @@ class DraculaAirQualityCard extends HTMLElement {
           ${this._renderGaugeSVG(hero.valueText, hero.unitText, hero.metricLabel, hero.pct, hero.color, hero.entityId)}
           <div class="hero-details">
             <div class="section-label" style="margin:0">${escapeHtml(this._t("air_quality_status"))}</div>
-            <div style="font-size:13px;color:var(--daq-subtext);line-height:1.4">${escapeHtml(hero.metricLabel)} · ${escapeHtml(hero.label)}</div>
+            <div style="font-size:13px;color:var(--daq-subtext);line-height:1.4">${escapeHtml(hero.metricLabel)}${hero.entityId && this._resolveSensorSource(hero.key, { entityId: hero.entityId }) ? ` (${escapeHtml(this._resolveSensorSource(hero.key, { entityId: hero.entityId }))})` : ""} · ${escapeHtml(hero.label)}</div>
           </div>
         </div>
         ${spark ? this._renderSparkline(spark.id, spark.label, spark.unit, spark.color) : ""}
