@@ -907,7 +907,7 @@ class DraculaAirQualityCard extends HTMLElement {
     this._confirmTimer = null;
     this._discoveryCache = new Map();
     this._autoDiscoveredList = null;
-    this._lastStateCount = -1;
+    this._lastStateIds = null;
     this._lastRenderSig = null;
     this._watchedIds = [];
     this._boundEsc = (e) => {
@@ -965,7 +965,7 @@ class DraculaAirQualityCard extends HTMLElement {
     if (this._confirmTimer) { clearTimeout(this._confirmTimer); this._confirmTimer = null; }
     this._discoveryCache.clear();
     this._autoDiscoveredList = null;
-    this._lastStateCount = -1;
+    this._lastStateIds = null;
     this._lastRenderSig = null;
     this._watchedIds = [];
     this.setAttribute("data-theme", ["auto", "dracula-soft"].includes(this._config.theme) ? this._config.theme : "dracula");
@@ -976,11 +976,11 @@ class DraculaAirQualityCard extends HTMLElement {
     this._hass = hass;
     if (!this._config) return;
     const states = hass?.states || {};
-    const stateCount = Object.keys(states).length;
-    if (stateCount !== this._lastStateCount) {
+    const stateIds = Object.keys(states);
+    if (!this._lastStateIds || stateIds.length !== this._lastStateIds.size || stateIds.some((id) => !this._lastStateIds.has(id))) {
       this._discoveryCache.clear();
       this._autoDiscoveredList = null;
-      this._lastStateCount = stateCount;
+      this._lastStateIds = new Set(stateIds);
       this._lastRenderSig = null;
     }
     if (this._lastRenderSig !== null && this._watchedIds.length > 0) {
