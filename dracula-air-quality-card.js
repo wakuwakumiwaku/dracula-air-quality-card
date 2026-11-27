@@ -398,6 +398,17 @@ function formatTimerValue(val, unit) {
 
 /* ---------- Whole-Home Auto-Discovery & Device State ---------- */
 
+function inferAqSensorKeyFromSlug(slug) {
+  if (/_(voc_index|voc)$/.test(slug)) return "voc";
+  if (/_tvoc$/.test(slug)) return "tvoc";
+  if (/_(nox_index|nox)$/.test(slug)) return "nox";
+  if (/_no2$/.test(slug)) return "no2";
+  if (/_o3$/.test(slug)) return "o3";
+  if (/_hcho$/.test(slug)) return "hcho";
+  if (/_radon$/.test(slug)) return "radon";
+  return null;
+}
+
 function autoDiscoverWholeHomeDevices(states, excludeList = []) {
   const exclude = new Set(Array.isArray(excludeList) ? excludeList : []);
   const devices = [];
@@ -405,32 +416,37 @@ function autoDiscoverWholeHomeDevices(states, excludeList = []) {
   const fanPrefixes = fans.flatMap((id) => getFanPrefixes(id));
   for (const fanId of fans) devices.push(fanId);
 
-  const aqClasses = new Set(["pm25", "carbon_dioxide", "carbon_monoxide", "volatile_organic_compounds", "volatile_organic_compounds_parts"]);
+  const aqClasses = new Set(["pm25", "carbon_dioxide", "carbon_monoxide", "volatile_organic_compounds", "volatile_organic_compounds_parts", "nitrogen_dioxide", "ozone"]);
   const sensorGroups = new Map();
   for (const [eid, st] of Object.entries(states)) {
     if (exclude.has(eid) || (!eid.startsWith("sensor.") && !eid.startsWith("binary_sensor."))) continue;
     const dc = st?.attributes?.device_class;
     const slug = eid.split(".")[1] || "";
     if (fanPrefixes.some((p) => slug === p || slug.startsWith(`${p}_`))) continue;
-    const prefix = slug.replace(/_(pm25|pm2_5|pm_2_5|pm10|pm1|co2|carbon_dioxide|co_alarm|co|carbon_monoxide|voc|tvoc|voc_index|temperature|humidity|hcho|radon)$/, "");
+    const prefix = slug.replace(/_(pm25|pm2_5|pm_2_5|pm10|pm1|co2|carbon_dioxide|co_alarm|co|carbon_monoxide|voc_index|voc|tvoc|nox_index|nox|no2|o3|temperature|humidity|hcho|radon)$/, "");
     if (eid.startsWith("binary_sensor.") && (dc === "carbon_monoxide" || dc === "gas")) {
       if (!sensorGroups.has(prefix)) sensorGroups.set(prefix, { name: titleCase(prefix || "Air Monitor"), sensors: {} });
       sensorGroups.get(prefix).sensors[dc === "gas" ? "gas_alarm" : "co_alarm"] = eid;
-    } else if (eid.startsWith("sensor.") && dc && aqClasses.has(dc)) {
-      const mapped = DEVICE_CLASS_TO_SENSOR[dc];
+    } else if (eid.startsWith("sensor.")) {
+      const mapped = (dc && aqClasses.has(dc)) ? DEVICE_CLASS_TO_SENSOR[dc] : inferAqSensorKeyFromSlug(slug);
       if (!mapped) continue;
       if (!sensorGroups.has(prefix)) sensorGroups.set(prefix, { name: titleCase(prefix || "Air Monitor"), sensors: {} });
       sensorGroups.get(prefix).sensors[mapped] = eid;
     }
   }
-  // Attach companion temp/humidity/pm10 sensors sharing an already-discovered sensor monitor prefix
+  // Attach companion sensors (temp/humidity/pm10/voc_index/nox_index) sharing an already-discovered monitor prefix
+  const diagTempRe = /(?:^|_)(esp32|chip|cpu|mcu|soc|internal)_temp(?:erature)?$/i;
   for (const [eid, st] of Object.entries(states)) {
     if (exclude.has(eid) || !eid.startsWith("sensor.")) continue;
-    const mapped = DEVICE_CLASS_TO_SENSOR[st?.attributes?.device_class];
-    if (!mapped) continue;
     const slug = eid.split(".")[1] || "";
+    const dc = st?.attributes?.device_class;
+    const mapped = (dc && DEVICE_CLASS_TO_SENSOR[dc]) || inferAqSensorKeyFromSlug(slug);
+    if (!mapped) continue;
+    if (mapped === "temperature" && diagTempRe.test(slug)) continue;
     for (const [prefix, grp] of sensorGroups.entries()) {
-      if (prefix && slug.startsWith(`${prefix}_`) && !grp.sensors[mapped]) {
+      if (!prefix || !slug.startsWith(`${prefix}_`)) continue;
+      const isExactTemp = mapped === "temperature" && slug === `${prefix}_temperature`;
+      if (!grp.sensors[mapped] || isExactTemp) {
         grp.sensors[mapped] = eid;
       }
     }
@@ -1459,7 +1475,7 @@ class DraculaAirQualityCard extends HTMLElement {
     // Synthesize companion sensor rows for purifiers with built-in AQ sensors (deduplicated from summary strip)
     const purifierSensors = [];
     if (this._config.include_purifier_sensors !== false) {
-      const titleOrder = ["pm25", "aqi", "co2", "co", "pm10", "voc", "tvoc", "no2", "o3", "hcho", "radon", "temperature", "humidity"];
+      const titleOrder = ["pm25", "aqi", "co2", "co", "pm10", "voc", "tvoc", "nox", "no2", "o3", "hcho", "radon", "temperature", "humidity"];
       for (const entry of purifiers) {
         const sKeys = titleOrder.filter((k) => entry.dev.sensors[k]);
         if (!sKeys.length) continue;
@@ -1647,7 +1663,7 @@ class DraculaAirQualityCard extends HTMLElement {
       }
     } else {
       // Sensor row: show up to 3 compact live value pills with labels & units
-      const sensorOrder = ["pm25", "aqi", "co2", "co", "voc", "tvoc", "pm10", "hcho", "radon", "no2", "o3", "temperature", "humidity"];
+      const sensorOrder = ["pm25", "aqi", "co2", "co", "voc", "tvoc", "nox", "pm10", "hcho", "radon", "no2", "o3", "temperature", "humidity"];
       const pills = [];
       if (dev.coAlarm && !coEval) {
         pills.push(`<span class="mini-badge alert" title="CO Alarm"><span class="dot" style="background:var(--daq-red)"></span>CO ALARM</span>`);
